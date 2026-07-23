@@ -33,12 +33,12 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: "Marktech Content OS",
       description: "Plan once. Reuse what works. Keep the human gate.",
-      images: [{ url: "/og.png", width: 1664, height: 936 }],
+      images: [{ url: "/og-earth.png", width: 1664, height: 936 }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Marktech Content OS",
-      images: ["/og.png"],
+      images: ["/og-earth.png"],
     },
   };
 }

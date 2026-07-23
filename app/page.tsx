@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 type IdeaStatus = "Needs review" | "Confirmed" | "Queued";
+type Pattern = "New angle" | "Copy-to-adapt" | "Retest";
 
 type ContentIdea = {
   id: string;
@@ -11,36 +12,19 @@ type ContentIdea = {
   program: string;
   concern: string;
   format: string;
-  pillar: string;
   hook: string;
   rationale: string;
   scheduledFor: string;
   status: IdeaStatus;
-  pattern: "New angle" | "Copy-to-adapt" | "Retest";
+  pattern: Pattern;
 };
 
+const navItems = ["วันนี้", "สร้างไอเดีย", "คลังที่เคยทำ", "ตั้งค่าการเชื่อมต่อ"];
+
 const mondayItems = [
-  {
-    client: "NV",
-    name: "NV JUL19 / therafill 1cc 15,900.-",
-    format: "ภาพ",
-    stage: "Client approving",
-    date: "31 Jul",
-  },
-  {
-    client: "Root Privé",
-    name: "Root JUL11 / Volnewmer 100 Shot",
-    format: "วิดีโอ",
-    stage: "Waiting for material",
-    date: "30 Jul",
-  },
-  {
-    client: "Fill-D",
-    name: "Fill-D JUL11 / ร้อยไหม เคสรีวิว",
-    format: "วิดีโอ",
-    stage: "Waiting for material",
-    date: "27 Jul",
-  },
+  { client: "NV", name: "Therafill 1cc 15,900.-", stage: "รอลูกค้าตรวจ", date: "31 ก.ค." },
+  { client: "Root Privé", name: "Volnewmer 100 Shot", stage: "รอ material", date: "30 ก.ค." },
+  { client: "Fill-D", name: "ร้อยไหม เคสรีวิว", stage: "รอ material", date: "27 ก.ค." },
 ];
 
 const initialIdeas: ContentIdea[] = [
@@ -51,10 +35,8 @@ const initialIdeas: ContentIdea[] = [
     program: "Botox",
     concern: "ริ้วรอย",
     format: "วิดีโอ",
-    pillar: "Concern education",
     hook: "หน้าดูเหนื่อย ไม่ได้แปลว่าแก่",
-    rationale:
-      "ใช้ Pain Point ริ้วรอยในภาษาชีวิตประจำวัน แล้วพาเข้าสู่ Botox แบบไม่ขายตรงเกินไป",
+    rationale: "เริ่มจาก pain point ในชีวิตจริง แล้วพาไปสู่ Botox แบบไม่ขายตรงเกินไป",
     scheduledFor: "2026-07-31",
     status: "Needs review",
     pattern: "Copy-to-adapt",
@@ -66,10 +48,8 @@ const initialIdeas: ContentIdea[] = [
     program: "Ultraformer",
     concern: "หน้าหย่อน",
     format: "อัลบั้ม",
-    pillar: "Decision guide",
     hook: "ไม่ใช่ทุกความหย่อน ต้องใช้เครื่องเดียวกัน",
-    rationale:
-      "เปลี่ยนจาก Offer-led เป็น Decision-led เพื่อช่วยให้แอดมินใช้เป็นบทสนทนาต่อได้",
+    rationale: "ช่วยให้แอดมินต่อบทสนทนาและพาคนสนใจไปสู่การนัดได้ง่ายขึ้น",
     scheduledFor: "2026-08-01",
     status: "Needs review",
     pattern: "New angle",
@@ -81,42 +61,43 @@ const initialIdeas: ContentIdea[] = [
     program: "ร้อยไหม",
     concern: "กลัวเจ็บ",
     format: "วิดีโอ",
-    pillar: "Social proof",
     hook: "คนที่กลัวเข็มที่สุด ยังตัดสินใจทำได้อย่างไร",
-    rationale:
-      "ต่อยอดจากวิดีโอรีวิวที่กำลังรอ Material และวาง CTA เพื่อให้แอดมินรับช่วงปิดนัด",
+    rationale: "ต่อยอดจากรีวิวที่กำลังรอ Material พร้อม CTA ให้แอดมินรับช่วงปิดนัด",
     scheduledFor: "2026-07-30",
     status: "Confirmed",
     pattern: "Retest",
   },
 ];
 
-const navItems = [
-  ["⌂", "Command Center"],
-  ["✦", "Idea Studio"],
-  ["▦", "Content Memory"],
-  ["↗", "Monday Sync"],
-  ["!", "Mapping Queue"],
-];
+function formatThaiDate(date: string) {
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(
+    new Date(`${date}T00:00:00`),
+  );
+}
 
-function statusClass(status: IdeaStatus) {
-  if (status === "Confirmed") return "status status-confirmed";
-  if (status === "Queued") return "status status-queued";
-  return "status status-review";
+function patternLabel(pattern: Pattern) {
+  return pattern === "Copy-to-adapt"
+    ? "ต่อยอดสิ่งที่เวิร์ก"
+    : pattern === "New angle"
+      ? "หา angle ใหม่"
+      : "ทดสอบซ้ำ";
 }
 
 export default function Home() {
-  const [activeNav, setActiveNav] = useState("Command Center");
+  const [activeNav, setActiveNav] = useState("วันนี้");
   const [ideas, setIdeas] = useState(initialIdeas);
   const [client, setClient] = useState("NV");
   const [program, setProgram] = useState("Botox");
   const [format, setFormat] = useState("วิดีโอ");
   const [scheduledFor, setScheduledFor] = useState("2026-07-31");
+  const [pattern, setPattern] = useState<Pattern>("Copy-to-adapt");
   const [role, setRole] = useState<"Planner" | "PM">("Planner");
-  const [notice, setNotice] = useState(
-    "Prototype mode — Monday ยังเป็น read-only จนกว่าจะตั้ง Secret สำหรับ Push",
-  );
+  const [notice, setNotice] = useState("วันนี้มี 2 ไอเดียที่ต้องตัดสินใจก่อนทีมเริ่มผลิต");
 
+  const reviewCount = useMemo(
+    () => ideas.filter((idea) => idea.status === "Needs review").length,
+    [ideas],
+  );
   const queueCount = useMemo(
     () => ideas.filter((idea) => idea.status === "Queued").length,
     [ideas],
@@ -133,349 +114,161 @@ export default function Home() {
       program,
       concern: program === "Botox" ? "ริ้วรอย" : "ต้องการคำแนะนำ",
       format,
-      pillar: "Decision guide",
       hook: "ตัดสินใจจากปัญหาจริง ไม่ใช่จากโปรอย่างเดียว",
-      rationale:
-        "Draft นี้ตั้งใจสร้างเป็นข้อมูลช่วยตัดสินใจ เพื่อให้แอดมินต่อบทสนทนาและพาไปสู่การนัดได้ง่ายขึ้น",
+      rationale: "ไอเดียนี้วางให้คนดูเข้าใจและให้แอดมินมีจุดเริ่มต้นเพื่อพาไปสู่การนัด",
       scheduledFor,
       status: "Needs review",
-      pattern: "New angle",
+      pattern,
     };
     setIdeas((current) => [nextIdea, ...current]);
-    setNotice(`สร้าง Draft ใหม่สำหรับ ${client} แล้ว — ตรวจและ Confirm ก่อนส่ง Monday`);
+    setNotice(`สร้างร่างไอเดียสำหรับ ${client} แล้ว — อยู่ในรายการ “รอตัดสินใจ” ด้านล่าง`);
   }
 
   function confirmIdea(id: string) {
-    const selectedIdea = ideas.find((idea) => idea.id === id);
-    if (!selectedIdea?.scheduledFor) {
-      setNotice("ต้องระบุวันที่ลงก่อนส่งรายการเข้า Monday Push Queue");
+    const selected = ideas.find((idea) => idea.id === id);
+    if (!selected?.scheduledFor) {
+      setNotice("กรุณาระบุวันที่ลงก่อนส่งต่อเข้า Monday");
       return;
     }
     setIdeas((current) =>
-      current.map((idea) =>
-        idea.id === id ? { ...idea, status: "Queued" } : idea,
-      ),
+      current.map((idea) => (idea.id === id ? { ...idea, status: "Queued" } : idea)),
     );
-    setNotice(
-      `${role} ย้ายเข้า Push Queue แล้ว — เมื่อเชื่อม Monday Secret ระบบจะสร้าง Task ตาม Board Mapping ที่ตั้งไว้`,
-    );
+    setNotice(`${role} ยืนยันแล้ว — ${selected.title} อยู่ในคิวส่งเข้า Monday`);
   }
 
   return (
-    <main className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">M</span>
-          <span>
-            <strong>marktech</strong>
-            <small>CONTENT OS</small>
-          </span>
-        </div>
-
-        <nav aria-label="Primary navigation">
-          {navItems.map(([icon, label]) => (
+    <main className="app-shell">
+      <header className="app-header">
+        <a className="brand" href="#top" aria-label="Marktech Content OS home">
+          <span className="brand-mark">m</span>
+          <span><strong>marktech</strong><small>ระบบวางคอนเทนท์</small></span>
+        </a>
+        <nav className="top-nav" aria-label="เมนูหลัก">
+          {navItems.map((item) => (
             <button
-              className={activeNav === label ? "nav-item active" : "nav-item"}
-              key={label}
-              onClick={() => setActiveNav(label)}
+              className={activeNav === item ? "nav-button is-active" : "nav-button"}
+              key={item}
+              onClick={() => setActiveNav(item)}
               type="button"
             >
-              <span>{icon}</span>
-              {label}
+              {item}
             </button>
           ))}
         </nav>
+        <label className="role-control">
+          <span>กำลังทำงานเป็น</span>
+          <select value={role} onChange={(event) => setRole(event.target.value as "Planner" | "PM")}> 
+            <option>Planner</option><option>PM</option>
+          </select>
+        </label>
+      </header>
 
-        <div className="sidebar-card">
-          <span className="eyebrow">MONDAY CONNECTION</span>
-          <strong>Read-only import ready</strong>
-          <p>Push จะเปิดเมื่อใส่ Monday API Secret และเลือก Board Mapping</p>
-          <div className="connection-row">
-            <i /> Connector audited
-          </div>
-        </div>
-
-        <div className="user-card">
-          <span className="avatar">KS</span>
-          <span>
-            <strong>Korrakot</strong>
-            <small>Workspace admin</small>
-          </span>
-          <button aria-label="Settings" type="button">
-            ⋯
-          </button>
-        </div>
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
+      <div className="app-main" id="top">
+        <section className="welcome-row">
           <div>
-            <p className="eyebrow">{activeNav}</p>
-            <h1>Content that learns what sells.</h1>
+            <p className="kicker">{activeNav} · พุธ 23 กรกฎาคม</p>
+            <h1>เลือกไอเดียที่ควรทำต่อ</h1>
+            <p className="lead">เริ่มจากงานที่ต้องตัดสินใจวันนี้ แล้วระบบจะจำสิ่งที่เวิร์กไว้ให้เดือนถัดไป</p>
           </div>
-          <div className="topbar-actions">
-            <label className="role-select">
-              <span>Role</span>
-              <select onChange={(event) => setRole(event.target.value as "Planner" | "PM")} value={role}>
-                <option>Planner</option>
-                <option>PM</option>
-              </select>
-            </label>
-            <button className="ghost-button" type="button">
-              <span className="dot" /> Last audit: 23 Jul
-            </button>
-            <button className="primary-button" onClick={generateDraft} type="button">
-              <span>＋</span> Generate draft
-            </button>
+          <div className="welcome-actions">
+            <button className="button button-secondary" onClick={() => setNotice("เลื่อนลงเพื่อดูไอเดียที่รอตัดสินใจ") } type="button">ดูรายการรอตัดสินใจ <span>↓</span></button>
+            <button className="button button-primary" onClick={generateDraft} type="button">+ สร้างร่างไอเดีย</button>
           </div>
-        </header>
+        </section>
 
-        <div className="notice" role="status">
-          <span>✦</span>
-          {notice}
-        </div>
+        <div className="notice" role="status"><span>วันนี้</span>{notice}</div>
 
-        <section className="metrics" aria-label="Operational overview">
-          <article>
-            <span className="metric-label">Content clients in Monday</span>
-            <strong>8 + Ads-only</strong>
-            <small>Content production and Ads-only clients in one view</small>
+        <section className="priority-grid" aria-label="งานสำคัญวันนี้">
+          <article className="priority-card priority-main">
+            <span className="card-label">ต้องทำก่อน</span>
+            <strong>{reviewCount} ไอเดียรอการตัดสินใจ</strong>
+            <p>ยืนยันแล้วจึงจะเข้าคิวสร้างงานใน Monday</p>
+            <button className="inline-action" onClick={() => setNotice("เลื่อนลงเพื่อดูไอเดียที่รอตัดสินใจ") } type="button">ตรวจไอเดีย <span>→</span></button>
           </article>
-          <article>
-            <span className="metric-label">Ideas needing human review</span>
-            <strong>{ideas.filter((idea) => idea.status === "Needs review").length}</strong>
-            <small>AI suggests; people decide</small>
-          </article>
-          <article>
-            <span className="metric-label">Ready for Monday push</span>
+          <article className="priority-card">
+            <span className="card-label">พร้อมส่ง Monday</span>
             <strong>{queueCount}</strong>
-            <small>Never creates a task without confirmation</small>
+            <p>มีวันที่ลงครบและรอการเชื่อมต่อแบบปลอดภัย</p>
           </article>
-          <article className="metric-alert">
-            <span className="metric-label">Mapping issues</span>
-            <strong>2</strong>
-            <small>Need a human rule before attribution</small>
+          <article className="priority-card">
+            <span className="card-label">ต้องตั้งกฎเพิ่ม</span>
+            <strong>2 รายการ</strong>
+            <p>ระบบจะไม่เดา เมื่อยังไม่รู้ว่าจะจัดเข้ากลุ่มไหน</p>
           </article>
         </section>
 
-        <section className="flow-card">
-          <div>
-            <p className="eyebrow">THE OPERATING LOOP</p>
-            <h2>Plan once. Reuse what works. Keep the human gate.</h2>
-          </div>
-          <div className="flow-track" aria-label="Workflow">
-            <span>Monday import</span>
-            <b>→</b>
-            <span>Content memory</span>
-            <b>→</b>
-            <span>Idea review</span>
-            <b>→</b>
-            <span className="flow-final">Confirm &amp; create task</span>
-          </div>
-        </section>
-
-        <div className="main-grid">
-          <section className="panel idea-studio">
-            <div className="panel-header">
+        <section className="work-grid">
+          <section className="card composer-card">
+            <div className="section-heading">
+              <div><p className="kicker">1. ตั้งโจทย์</p><h2>สร้างไอเดียที่นำไปใช้ได้</h2></div>
+              <span className="soft-tag">AI ช่วยร่าง · คนเป็นคนเลือก</span>
+            </div>
+            <div className="field-grid">
+              <label>ลูกค้า<select value={client} onChange={(event) => setClient(event.target.value)}>
+                <option>NV</option><option>Root Privé</option><option>Fill-D</option><option>Be Bright</option><option>A&amp;B Clinic</option><option>Sherlyn</option><option>Facial Studio</option><option>Luxe Aesthetics</option><option>Essoul (Ads-only)</option><option>Meseoul (Ads-only)</option><option>De&apos;Vana (Ads-only)</option><option>Boseong (Ads-only)</option><option>2Praw (Ads-only)</option><option>The Phat (Ads-only)</option>
+              </select></label>
+              <label>โปรแกรม<select value={program} onChange={(event) => setProgram(event.target.value)}>
+                <option>Botox</option><option>Filler</option><option>HIFU</option><option>Ultraformer</option><option>Pico</option><option>Package / Offer</option>
+              </select></label>
+              <label>รูปแบบ<select value={format} onChange={(event) => setFormat(event.target.value)}><option>วิดีโอ</option><option>ภาพ</option><option>อัลบั้ม</option></select></label>
+              <label>วันที่ลง <em>*</em><input min="2026-07-23" onChange={(event) => setScheduledFor(event.target.value)} type="date" value={scheduledFor} /></label>
+            </div>
+            <fieldset className="pattern-picker">
+              <legend>ใช้แนวทางไหน</legend>
               <div>
-                <p className="eyebrow">IDEA STUDIO</p>
-                <h2>Compose the next test</h2>
+                {([
+                  ["Copy-to-adapt", "ต่อยอดสิ่งที่เวิร์ก", "ใช้โครงหรือ hook เดิมกับโปรแกรมใหม่"],
+                  ["New angle", "หา angle ใหม่", "สร้างมุมพูดใหม่ที่ยังไม่ซ้ำคลัง"],
+                  ["Retest", "ทดสอบซ้ำ", "นำ concept ที่ดีมาปรับ execution"],
+                ] as [Pattern, string, string][]).map(([value, label, detail]) => (
+                  <button className={pattern === value ? "pattern-option selected" : "pattern-option"} key={value} onClick={() => setPattern(value)} type="button">
+                    <strong>{label}</strong><small>{detail}</small>
+                  </button>
+                ))}
               </div>
-              <span className="pill">No historical backfill</span>
-            </div>
-
-            <div className="composer-grid">
-              <label>
-                Client
-                <select onChange={(event) => setClient(event.target.value)} value={client}>
-                  <option>NV</option>
-                  <option>Root Privé</option>
-                  <option>Fill-D</option>
-                  <option>Be Bright</option>
-                  <option>A&amp;B Clinic</option>
-                  <option>Sherlyn</option>
-                  <option>Facial Studio</option>
-                  <option>Luxe Aesthetics</option>
-                  <option>Essoul (Ads-only)</option>
-                  <option>Meseoul (Ads-only)</option>
-                  <option>De&apos;Vana (Ads-only)</option>
-                  <option>Boseong (Ads-only)</option>
-                  <option>2Praw (Ads-only)</option>
-                  <option>The Phat (Ads-only)</option>
-                </select>
-              </label>
-              <label>
-                Program
-                <select onChange={(event) => setProgram(event.target.value)} value={program}>
-                  <option>Botox</option>
-                  <option>Filler</option>
-                  <option>HIFU</option>
-                  <option>Ultraformer</option>
-                  <option>Pico</option>
-                  <option>Package / Offer</option>
-                </select>
-              </label>
-              <label>
-                Format
-                <select onChange={(event) => setFormat(event.target.value)} value={format}>
-                  <option>วิดีโอ</option>
-                  <option>ภาพ</option>
-                  <option>อัลบั้ม</option>
-                </select>
-              </label>
-              <label>
-                วันที่ลง <em>*</em>
-                <input
-                  min="2026-07-23"
-                  onChange={(event) => setScheduledFor(event.target.value)}
-                  type="date"
-                  value={scheduledFor}
-                />
-              </label>
-            </div>
-
-            <div className="strategy-row">
-              <button className="strategy active" type="button">
-                <span>↗</span>
-                <strong>Copy-to-adapt</strong>
-                <small>Reuse a winning pattern for a new program or audience</small>
-              </button>
-              <button className="strategy" type="button">
-                <span>◌</span>
-                <strong>New angle</strong>
-                <small>Explore a new hook without duplicating an old idea</small>
-              </button>
-              <button className="strategy" type="button">
-                <span>↻</span>
-                <strong>Retest</strong>
-                <small>Bring back a proven concept with a new execution</small>
-              </button>
-            </div>
-
-            <button className="full-button" onClick={generateDraft} type="button">
-              Generate reviewable draft <span>→</span>
-            </button>
+            </fieldset>
+            <button className="button button-primary full-width" onClick={generateDraft} type="button">สร้างร่างไอเดียเพื่อให้ตรวจ <span>→</span></button>
           </section>
 
-          <section className="panel monday-panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">MONDAY IMPORT</p>
-                <h2>What the production team is seeing</h2>
-              </div>
-              <button className="text-button" type="button">
-                Sync settings
-              </button>
-            </div>
+          <aside className="card production-card">
+            <div className="section-heading"><div><p className="kicker">งานผลิตจาก Monday</p><h2>สิ่งที่ทีมกำลังรอ</h2></div><button className="link-button" onClick={() => setNotice("การดึงงานจาก Monday พร้อมเปิดใช้เมื่อเพิ่ม Secret") } type="button">การเชื่อมต่อ</button></div>
             <div className="monday-list">
-              {mondayItems.map((item) => (
-                <article className="monday-item" key={item.name}>
-                  <span className="client-badge">{item.client.slice(0, 2)}</span>
-                  <div>
-                    <strong>{item.name}</strong>
-                    <small>{item.format} · {item.stage}</small>
-                  </div>
-                  <time>{item.date}</time>
-                </article>
-              ))}
+              {mondayItems.map((item) => <article className="monday-item" key={item.name}>
+                <span className="client-badge">{item.client.slice(0, 2)}</span>
+                <div><strong>{item.client}</strong><p>{item.name}</p><small>{item.stage}</small></div><time>{item.date}</time>
+              </article>)}
             </div>
-            <div className="import-note">
-              <span>✓</span>
-              Monday stays the production workspace. This app stores the memory,
-              taxonomy and mapping around it.
-            </div>
-          </section>
-        </div>
+            <div className="production-note"><strong>หลักการทำงาน</strong><p>Monday เป็นที่ทำงานของทีมผลิต ส่วนที่นี่เป็นที่เก็บความจำของคอนเทนท์และผลลัพธ์</p></div>
+          </aside>
+        </section>
 
-        <section className="panel idea-library">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">REVIEW QUEUE</p>
-              <h2>Ideas that are safe to judge, adapt or send forward</h2>
-            </div>
-            <div className="legend">
-              <span><i className="legend-dot mint" /> Confirmed</span>
-              <span><i className="legend-dot amber" /> Needs review</span>
-              <span><i className="legend-dot blue" /> Queued</span>
-            </div>
-          </div>
-
-          <div className="ideas">
-            {ideas.map((idea) => (
-              <article className="idea-card" key={idea.id}>
-                <div className="idea-card-head">
-                  <span className="content-id">{idea.id}</span>
-                  <span className={statusClass(idea.status)}>{idea.status}</span>
-                </div>
+        <section className="review-section" id="review">
+          <div className="section-heading"><div><p className="kicker">2. ตัดสินใจ</p><h2>รายการที่ต้องให้คนเลือก</h2><p className="section-sub">อ่านเหตุผลและกดปุ่มด้านล่างเมื่อพร้อมส่งต่อ</p></div><span className="count-badge">{reviewCount} รอตรวจ</span></div>
+          <div className="idea-list">
+            {ideas.map((idea) => <article className="idea-card" key={idea.id}>
+              <div className="idea-card-main">
+                <div className="idea-meta"><span className={`status status-${idea.status.toLowerCase().replace(" ", "-")}`}>{idea.status === "Needs review" ? "รอตัดสินใจ" : idea.status === "Confirmed" ? "ยืนยันแล้ว" : "เข้าคิวแล้ว"}</span><span>{idea.id}</span><span>ลง {formatThaiDate(idea.scheduledFor)}</span></div>
                 <h3>{idea.title}</h3>
-                <div className="tags">
-                  <span>{idea.client}</span>
-                  <span>{idea.program}</span>
-                  <span>{idea.concern}</span>
-                  <span>{idea.format}</span>
-                </div>
-                <p className="idea-hook">“{idea.hook}”</p>
-                <p className="idea-rationale">{idea.rationale}</p>
-                <p className="planned-date">
-                  ลงวันที่ {new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(new Date(`${idea.scheduledFor}T00:00:00`))}
-                </p>
-                <footer>
-                  <span className="pattern">{idea.pattern}</span>
-                  {idea.status === "Needs review" ? (
-                    <button onClick={() => confirmIdea(idea.id)} type="button">
-                      Confirm → Queue
-                    </button>
-                  ) : idea.status === "Confirmed" ? (
-                    <button onClick={() => confirmIdea(idea.id)} type="button">
-                      Queue for Monday
-                    </button>
-                  ) : (
-                    <span className="queued-label">Ready for secure push</span>
-                  )}
-                </footer>
-              </article>
-            ))}
+                <div className="tag-row"><span>{idea.client}</span><span>{idea.program}</span><span>{idea.concern}</span><span>{idea.format}</span><span>{patternLabel(idea.pattern)}</span></div>
+                <p className="hook">“{idea.hook}”</p><p className="rationale">{idea.rationale}</p>
+              </div>
+              <div className="idea-card-action">
+                {idea.status === "Queued" ? <><span className="queue-label">พร้อมส่งเข้า Monday</span><small>วันที่ลง: {formatThaiDate(idea.scheduledFor)}</small></> : <>
+                  <small>ตรวจโดย {role}</small><button className="button button-primary" onClick={() => confirmIdea(idea.id)} type="button">{idea.status === "Confirmed" ? "เข้าคิว Monday" : "ยืนยันไอเดีย"} <span>→</span></button>
+                </>}
+              </div>
+            </article>)}
           </div>
         </section>
 
-        <section className="mapping-grid">
-          <article className="panel mapping-panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">MAPPING QUEUE</p>
-                <h2>Never guess when the system does not know.</h2>
-              </div>
-              <span className="mapping-count">2 open</span>
-            </div>
-            <div className="mapping-row">
-              <span className="warning-icon">!</span>
-              <div>
-                <strong>NV โปรสาขาสกล</strong>
-                <small>Missing client and format in the imported task</small>
-              </div>
-              <button type="button">Map now</button>
-            </div>
-            <div className="mapping-row">
-              <span className="warning-icon">!</span>
-              <div>
-                <strong>all / 6,666</strong>
-                <small>Needs a Package/Offer mapping; do not classify as Program</small>
-              </div>
-              <button type="button">Add package</button>
-            </div>
-          </article>
-
-          <article className="panel rules-panel">
-            <p className="eyebrow">DEFAULT RULES</p>
-            <h2>Marktech taxonomy is ready to learn.</h2>
-            <dl>
-              <div><dt>Service Group</dt><dd>Injectable → Botox, Filler</dd></div>
-              <div><dt>Default Concern Rule</dt><dd>ริ้วรอย → Botox</dd></div>
-              <div><dt>Bundle Rule</dt><dd>all → Package / Needs review</dd></div>
-            </dl>
-          </article>
+        <section className="bottom-grid">
+          <section className="card mapping-card"><div className="section-heading"><div><p className="kicker">ต้องกำหนดกฎ</p><h2>ระบบพบข้อมูลที่ไม่แน่ใจ</h2></div><span className="count-badge warn">2 รายการ</span></div>
+            <div className="mapping-row"><div><strong>NV โปรสาขาสกล</strong><p>ยังไม่มี Client และรูปแบบในข้อมูลที่ import</p></div><button className="button button-secondary" onClick={() => setNotice("เปิดหน้าตั้งกฎสำหรับ NV โปรสาขาสกล") } type="button">จัดกลุ่ม</button></div>
+            <div className="mapping-row"><div><strong>all / 6,666</strong><p>ควรบันทึกเป็น Package / Offer ไม่ใช่ Program</p></div><button className="button button-secondary" onClick={() => setNotice("เปิดหน้าสร้าง Package / Offer mapping") } type="button">เพิ่มกฎ</button></div>
+          </section>
+          <aside className="card taxonomy-card"><p className="kicker">กฎที่ใช้อยู่</p><h2>Taxonomy ของ Marktech</h2><dl><div><dt>Service Group</dt><dd>Injectable → Botox, Filler</dd></div><div><dt>Concern เริ่มต้น</dt><dd>ริ้วรอย → Botox</dd></div><div><dt>Package</dt><dd>all → รอตั้งกฎให้ชัด</dd></div></dl></aside>
         </section>
-      </section>
+      </div>
     </main>
   );
 }
