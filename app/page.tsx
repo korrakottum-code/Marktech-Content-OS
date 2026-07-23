@@ -3,103 +3,173 @@
 import { useMemo, useState } from "react";
 
 type Format = "วิดีโอ" | "ภาพ" | "อัลบั้ม";
+type ProductBrief = { id: string; product: string; goal: string; customNeed: string };
 type Idea = {
   id: string;
+  product: string;
   title: string;
   hook: string;
+  reason: string;
+  adminAngle: string;
   format: Format;
   pillar: string;
   selected: boolean;
   date?: string;
 };
+type Slide = { id: string; kind: "cover" | "strategy" | "content" | "custom"; title: string; body: string };
+type ExistingWork = { date: string; format: Format; title: string };
 
 const contentClients = ["NV", "Root Privé", "Fill-D", "Be Bright", "A&B Clinic", "Sherlyn", "Facial Studio", "Luxe Aesthetics"];
 const clientOptions = [...contentClients, "Essoul (Ads-only)", "Meseoul (Ads-only)", "De'Vana (Ads-only)", "Boseong (Ads-only)"];
-const blockedDates = new Map([
-  ["2026-07-27", "Fill-D · ร้อยไหม เคสรีวิว"],
-  ["2026-07-28", "วันหยุดนักขัตฤกษ์"],
-  ["2026-07-30", "Root Privé · Volnewmer 100 Shot"],
-  ["2026-07-31", "NV · Therafill 1cc"],
-]);
-const groupOptions = ["New Brief", "Creative /พี่โฮม", "Creative /เอิน", "Team Approving", "Client Approving", "Post"];
-const ideaSeeds = [
-  ["Pain point", "คนที่เห็นคลิปนี้น่าจะกำลังเจอปัญหานี้อยู่"],
-  ["Before deciding", "ก่อนตัดสินใจ อยากให้เช็กข้อนี้ก่อน"],
-  ["Myth busting", "ความเชื่อที่ทำให้หลายคนตัดสินใจช้าเกินไป"],
-  ["Compare", "ไม่ใช่ทุกเคสต้องเลือกทางเดียวกัน"],
-  ["Proof", "ให้เคสจริงช่วยตอบคำถามแทนคำโฆษณา"],
-  ["Expert", "หมออธิบายสั้น ๆ ว่าอะไรคือจุดที่ต้องดู"],
-  ["Objection", "กลัวเจ็บ กลัวไม่ธรรมชาติ หรือกลัวไม่คุ้ม"],
-  ["Routine", "สัญญาณเล็ก ๆ ในชีวิตประจำวันที่บอกว่าควรเริ่มดูแล"],
-  ["Offer bridge", "เริ่มจากปัญหา แล้วค่อยพาไปดูโปรที่เหมาะ"],
-  ["Aftercare", "ทำแล้วต้องดูแลอย่างไรให้ผลลัพธ์ดูดี"],
-  ["FAQ", "คำถามที่แอดมินเจอบ่อยที่สุดก่อนลูกค้าจอง"],
-  ["Social proof", "คนที่ลังเลแบบเดียวกัน ตัดสินใจจากอะไร"],
-] as const;
+const productOptions = ["Botox", "Filler", "HIFU", "Ultraformer", "Pico", "ร้อยไหม", "วิตามิน", "Package / Offer", "ไม่ระบุโปรดักต์"];
+const groupOptions = [
+  { label: "New Brief", id: "new_group29179" },
+  { label: "Creative /พี่โฮม", id: "new_group__1" },
+  { label: "Creative /เอิน", id: "group_mm0em08x" },
+  { label: "Team Approving", id: "new_group92743__1" },
+  { label: "Client Approving", id: "new_group38334__1" },
+  { label: "Post", id: "new_group48537__1" },
+];
+
+// This is only the small workload seed used until the deployed Monday calendar
+// credential is configured. The scheduling algorithm itself always balances
+// workload count plus format count, including the newly planned items.
+const existingWork: ExistingWork[] = [
+  { date: "2026-07-27", format: "อัลบั้ม", title: "Fill-D · ร้อยไหม เคสรีวิว" },
+  { date: "2026-07-30", format: "วิดีโอ", title: "Root Privé · Volnewmer 100 Shot" },
+  { date: "2026-07-31", format: "ภาพ", title: "NV · Therafill 1cc" },
+];
+
+function monthNow() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
 
 function localDateFromIso(date: string) {
   const [year, month, day] = date.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
-function isoFromLocalDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function isoFromDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function thaiDate(date: string) {
   return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(localDateFromIso(date));
 }
 
-function createIdeas(program: string, concern: string): Idea[] {
-  return Array.from({ length: 36 }, (_, index) => {
-    const [pillar, hook] = ideaSeeds[index % ideaSeeds.length];
-    const variation = Math.floor(index / ideaSeeds.length) + 1;
-    const format: Format = index % 3 === 0 ? "วิดีโอ" : index % 3 === 1 ? "ภาพ" : "อัลบั้ม";
-    return {
-      id: `IDEA-${String(index + 1).padStart(2, "0")}`,
-      title: `${program}: ${pillar === "Pain point" ? `${concern} แบบไหนที่ไม่ควรปล่อยไว้` : `${pillar} สำหรับคนที่กำลังคิดเรื่อง ${program}`} · มุมที่ ${variation}`,
-      hook,
-      format,
-      pillar,
-      selected: index < 12,
-    };
-  });
+function daysInMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  return Array.from({ length: lastDay }, (_, index) => isoFromDate(new Date(year, monthNumber - 1, index + 1)));
 }
 
-function nextAvailableDates(amount: number) {
-  const dates: string[] = [];
-  const cursor = new Date(2026, 6, 24);
-  while (dates.length < amount) {
-    const iso = isoFromLocalDate(cursor);
-    const weekday = cursor.getDay();
-    if (weekday !== 0 && weekday !== 6 && !blockedDates.has(iso)) dates.push(iso);
-    cursor.setDate(cursor.getDate() + 1);
+function scrollToId(id: string) {
+  window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+}
+
+function titleForMonday(client: string, month: string, number: number, idea: Idea) {
+  const monthLabel = month.replace("-", "");
+  return `${client} | ${monthLabel} | ${String(number).padStart(2, "0")} | ${idea.product} | ${idea.title}`;
+}
+
+function buildSlides(client: string, month: string, theme: string, ideas: Idea[]) {
+  const monthLabel = new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric" }).format(localDateFromIso(`${month}-01`));
+  return [
+    { id: "slide-cover", kind: "cover" as const, title: `Content Plan · ${client}`, body: `${monthLabel}\nคอนเซ็ปต์ประจำเดือน: ${theme || "สร้างบทสนทนาที่พาไปสู่การนัด"}` },
+    { id: "slide-strategy", kind: "strategy" as const, title: "แนวคิดและบทบาทของแผน", body: "ใช้คอนเทนท์หลายมุมเพื่อพาคนจากปัญหา → ความเข้าใจ → ความมั่นใจ → การทักแชต\n\nทุกชิ้นต้องมี Hook ที่ชัด เหตุผลรองรับ และคำถามที่แอดมินใช้ตอบต่อได้" },
+    ...ideas.map((idea, index) => ({
+      id: `slide-${idea.id}`,
+      kind: "content" as const,
+      title: `${String(index + 1).padStart(2, "0")} · ${idea.title}`,
+      body: `รูปแบบ: ${idea.format}\nมุมเล่า: ${idea.pillar}\n\nHook: ${idea.hook}\n\nเหตุผลที่ควรทำ: ${idea.reason}\n\nแอดมินต่อบทสนทนา: ${idea.adminAngle}`,
+    })),
+  ];
+}
+
+function balancedDates(ideas: Idea[], month: string) {
+  const allDates = daysInMonth(month);
+  const existing = existingWork.filter((work) => work.date.startsWith(month));
+  const assignments = new Map<string, { total: number; formats: Record<Format, number> }>();
+  for (const date of allDates) assignments.set(date, { total: 0, formats: { วิดีโอ: 0, ภาพ: 0, อัลบั้ม: 0 } });
+  for (const work of existing) {
+    const slot = assignments.get(work.date);
+    if (slot) { slot.total += 1; slot.formats[work.format] += 1; }
   }
-  return dates;
+
+  const result = new Map<string, string>();
+  ideas.forEach((idea, index) => {
+    const idealIndex = Math.round(((index + 0.5) * allDates.length) / ideas.length) - 1;
+    const candidates = allDates
+      .map((date, dateIndex) => ({ date, dateIndex, slot: assignments.get(date)! }))
+      .sort((a, b) => {
+        const scoreA = a.slot.total * 12 + a.slot.formats[idea.format] * 7 + Math.abs(a.dateIndex - idealIndex) * 0.75;
+        const scoreB = b.slot.total * 12 + b.slot.formats[idea.format] * 7 + Math.abs(b.dateIndex - idealIndex) * 0.75;
+        return scoreA - scoreB || a.dateIndex - b.dateIndex;
+      })[0];
+    result.set(idea.id, candidates.date);
+    candidates.slot.total += 1;
+    candidates.slot.formats[idea.format] += 1;
+  });
+  return result;
 }
 
 export default function Home() {
   const [client, setClient] = useState("NV");
-  const [program, setProgram] = useState("Botox");
-  const [concern, setConcern] = useState("ริ้วรอย");
+  const [planMonth, setPlanMonth] = useState(monthNow);
+  const [theme, setTheme] = useState("เพิ่มบทสนทนาที่มีโอกาสนัด และมีคอนเทนท์ที่ใช้ยิงแอดต่อได้");
   const [quantity, setQuantity] = useState(12);
+  const [briefs, setBriefs] = useState<ProductBrief[]>([{ id: "brief-1", product: "Botox", goal: "แก้ concern ริ้วรอยและทำให้กล้าทัก", customNeed: "" }]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [slides, setSlides] = useState<Slide[]>([]);
   const [step, setStep] = useState(1);
-  const [group, setGroup] = useState("New Brief");
+  const [groupId, setGroupId] = useState(groupOptions[0].id);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [notice, setNotice] = useState("เริ่มจากกรอกโจทย์ครั้งเดียว แล้วระบบจะพาไปจนถึงการส่งงาน");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [notice, setNotice] = useState("ตั้งเดือน เป้าหมาย และหัวข้อที่อยากสื่อ แล้วให้ AI แตกหลายทางเลือกในครั้งเดียว");
   const adsOnly = !contentClients.includes(client);
 
   const selectedIdeas = useMemo(() => ideas.filter((idea) => idea.selected), [ideas]);
   const scheduledIdeas = useMemo(() => selectedIdeas.filter((idea) => idea.date), [selectedIdeas]);
+  const activeGroup = groupOptions.find((group) => group.id === groupId) ?? groupOptions[0];
+  const monthDates = useMemo(() => daysInMonth(planMonth), [planMonth]);
+  const monthExisting = useMemo(() => existingWork.filter((work) => work.date.startsWith(planMonth)), [planMonth]);
 
-  function generateIdeas() {
-    setIdeas(createIdeas(program, concern));
-    setStep(2);
-    setNotice("สร้างชุดไอเดีย 36 ชิ้นแล้ว — เลือกเฉพาะชิ้นที่ควรเข้าแผนเดือนนี้");
+  function updateBrief(id: string, field: keyof Omit<ProductBrief, "id">, value: string) {
+    setBriefs((current) => current.map((brief) => brief.id === id ? { ...brief, [field]: value } : brief));
+  }
+
+  function addBrief() {
+    setBriefs((current) => [...current, { id: `brief-${Date.now()}`, product: "ไม่ระบุโปรดักต์", goal: "", customNeed: "" }]);
+  }
+
+  function removeBrief(id: string) {
+    setBriefs((current) => current.length === 1 ? current : current.filter((brief) => brief.id !== id));
+  }
+
+  async function generateIdeas() {
+    const usableBriefs = briefs.filter((brief) => brief.product !== "ไม่ระบุโปรดักต์" || brief.goal || brief.customNeed);
+    if (!usableBriefs.length) return setNotice("เพิ่มอย่างน้อย 1 โปรดักต์ หรือพิมพ์เรื่องที่อยากสื่อก่อนให้ AI คิด");
+    setIsGenerating(true);
+    setNotice("AI กำลังแตกแนวคิดหลายมุมจากโจทย์เดือนนี้…");
+    try {
+      const response = await fetch("/api/ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client, planMonth, theme, quantity, briefs: usableBriefs }),
+      });
+      const payload = await response.json() as { ideas?: Omit<Idea, "selected" | "date">[]; error?: string; nextStep?: string };
+      if (!response.ok || !payload.ideas) throw new Error(payload.nextStep ?? payload.error ?? "AI ยังสร้างไอเดียไม่ได้");
+      setIdeas(payload.ideas.map((idea, index) => ({ ...idea, id: idea.id || `IDEA-${String(index + 1).padStart(2, "0")}`, selected: index < quantity })));
+      setSlides([]);
+      setStep(2);
+      setNotice(`AI สร้าง ${payload.ideas.length} ไอเดียแล้ว — ระบบเลือก ${quantity} ชิ้นแรกที่คละรูปแบบไว้ให้ คุณคัดหรือปรับเพิ่มได้`);
+      scrollToId("idea-selection");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "ยังเชื่อม AI ไม่สำเร็จ");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   function toggleIdea(id: string) {
@@ -108,119 +178,123 @@ export default function Home() {
 
   function selectRecommended() {
     setIdeas((current) => current.map((idea, index) => ({ ...idea, selected: index < quantity })));
-    setNotice(`เลือก ${quantity} ไอเดียที่หลากหลายและเหมาะกับการปิดนัดให้แล้ว — คุณกดแก้รายชิ้นได้`);
+    setNotice(`เลือก ${quantity} ชิ้นที่ AI จัดให้คละโปรดักต์ มุมเล่า และรูปแบบแล้ว`);
   }
 
   function makeProposal() {
-    if (selectedIdeas.length === 0) return setNotice("เลือกอย่างน้อย 1 ไอเดียก่อนทำข้อเสนอ");
+    if (!selectedIdeas.length) return setNotice("เลือกอย่างน้อย 1 ไอเดียก่อนสร้างข้อเสนอ");
+    setSlides(buildSlides(client, planMonth, theme, selectedIdeas));
     setStep(3);
-    setNotice(`สรุปแผน ${selectedIdeas.length} ชิ้นเป็นข้อเสนอสำหรับ ${client} แล้ว`);
+    setNotice(`สร้างสไลด์คอนเซ็ปต์เดือนนี้และคำอธิบาย ${selectedIdeas.length} คอนเทนท์แล้ว — แก้ข้อความรายหน้าได้เลย`);
+    scrollToId("proposal-slides");
+  }
+
+  function updateSlide(id: string, field: "title" | "body", value: string) {
+    setSlides((current) => current.map((slide) => slide.id === id ? { ...slide, [field]: value } : slide));
   }
 
   function approveProposal() {
     setStep(4);
-    setNotice("แผนผ่านลูกค้าแล้ว — ขั้นต่อไปคือจัดวันลงที่ไม่ชนงานและไม่ชนวันหยุด");
+    setNotice("ผ่านทั้งแผนแล้ว — ขั้นต่อไปคือกระจายวันลงตลอดทั้งเดือน โดยดูจำนวนงานและประเภทงานในแต่ละวัน");
+    scrollToId("month-calendar");
   }
 
   function schedulePlan() {
-    const dates = nextAvailableDates(selectedIdeas.length);
-    let position = 0;
-    setIdeas((current) => current.map((idea) => idea.selected ? { ...idea, date: dates[position++] } : idea));
+    const dates = balancedDates(selectedIdeas, planMonth);
+    setIdeas((current) => current.map((idea) => idea.selected ? { ...idea, date: dates.get(idea.id) } : idea));
     setStep(5);
-    setNotice(`จัดวันลงครบ ${selectedIdeas.length} ชิ้นแล้ว ระบบข้ามวันหยุดและวันที่มีงานใน Monday อยู่แล้ว`);
+    setNotice(`จัดวันลง ${selectedIdeas.length} ชิ้นครบทั้งเดือนแล้ว — ระบบกระจายตามจำนวนงานและประเภทงาน ไม่ได้ตัดวันหยุดออก`);
+    scrollToId("monday-destination");
   }
 
   function openMondayConfirmation() {
-    if (adsOnly) return setNotice("ลูกค้ารายนี้เป็น Ads-only: จบที่เอกสารแนะนำคอนเทนท์ ไม่สร้างงานใน Monday");
+    if (adsOnly) return setNotice("ลูกค้ารายนี้เป็น Ads-only: จบที่ข้อเสนอและสไลด์ ไม่สร้างงานใน Monday");
     if (scheduledIdeas.length !== selectedIdeas.length) return setNotice("จัดวันลงให้ครบทุกชิ้นก่อนส่ง Monday");
     setShowConfirm(true);
   }
 
-  function confirmMonday() {
-    setShowConfirm(false);
-    setNotice("เว็บแอปยังไม่ได้รับสิทธิ์เชื่อม Monday ฝั่งเซิร์ฟเวอร์ จึงยังไม่ส่งงานจริงและไม่สร้างงานซ้ำ — ปลายทางที่เลือกถูกบันทึกไว้ให้ตรวจแล้ว");
+  async function confirmMonday() {
+    try {
+      const response = await fetch("/api/monday/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          groupId,
+          tasks: selectedIdeas.map((idea, index) => ({
+            contentId: idea.id,
+            title: titleForMonday(client, planMonth, index + 1, idea),
+            client,
+            format: idea.format,
+            scheduledFor: idea.date,
+          })),
+        }),
+      });
+      const payload = await response.json() as { created?: number; error?: string; nextStep?: string };
+      if (!response.ok) throw new Error(payload.nextStep ?? payload.error ?? "ส่ง Monday ไม่สำเร็จ");
+      setNotice(`สร้าง ${payload.created ?? selectedIdeas.length} งานใน ${activeGroup.label} เรียบร้อยแล้ว`);
+      setShowConfirm(false);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "ส่ง Monday ไม่สำเร็จ");
+    }
   }
 
-  const stages = ["ตั้งโจทย์", "คัดชุดไอเดีย", "สรุปเสนอ", "อนุมัติแผน", "จัดวันและส่ง Monday"];
+  const stages = ["ตั้งโจทย์", "คัดชุดไอเดีย", "ทำสไลด์", "อนุมัติแผน", "จัดวันและส่ง Monday"];
 
-  return <main className="planner-shell">
+  return <main className="planner-shell" id="top">
     <header className="planner-header">
       <a className="brand" href="#top" aria-label="Marktech Content OS home"><span className="brand-mark">m</span><span><strong>marktech</strong><small>content planning OS</small></span></a>
-      <div className="header-copy"><strong>วางแผนคอนเทนท์รายเดือน</strong><span>ทำครั้งเดียว จบถึงทีมผลิต</span></div>
-      <button className="button button-secondary" onClick={() => { setIdeas([]); setStep(1); setNotice("เริ่มแผนใหม่ได้เลย"); }} type="button">+ เริ่มแผนใหม่</button>
+      <div className="header-copy"><strong>วางแผนคอนเทนท์รายเดือน</strong><span>AI คิด → ทีมคัด → ลูกค้าอนุมัติ → ส่งทีมผลิต</span></div>
+      <button className="button button-secondary" onClick={() => { setIdeas([]); setSlides([]); setStep(1); setNotice("เริ่มแผนใหม่ได้เลย"); scrollToId("brief"); }} type="button">+ เริ่มแผนใหม่</button>
     </header>
 
-    <div className="planner-main" id="top">
-      <section className="hero">
-        <p className="eyebrow">MARKTECH CONTENT OS · WORKFLOW</p>
-        <h1>จากโจทย์เดียว<br/>ไปถึงงานใน Monday</h1>
-        <p>ไม่ต้องนั่งยืนยันไอเดียทีละชิ้น ระบบสร้างตัวเลือกให้คัด → รวมเป็นข้อเสนอ → วางวันลง → ให้ตรวจปลายทางก่อนส่ง</p>
-      </section>
+    <section className="hero">
+      <p className="eyebrow">MARKTECH CONTENT OS · MONTHLY PLANNING</p>
+      <h1>สั่งโจทย์ครั้งเดียว<br />ให้ AI คิดทั้งเดือน</h1>
+      <p>หลายโปรดักต์ก็ได้ ไม่มีโปรดักต์ก็ได้ แล้วคัดเป็นแผนที่พร้อมนำเสนอและส่งทีมผลิต</p>
+      <ol className="journey" aria-label="ขั้นตอนการวางแผน">{stages.map((stage, index) => <li className={step > index + 1 ? "done" : step === index + 1 ? "active" : ""} key={stage}><span>{step > index + 1 ? "✓" : index + 1}</span><strong>{stage}</strong></li>)}</ol>
+    </section>
 
-      <ol className="journey" aria-label="ขั้นตอนการวางแผน">
-        {stages.map((name, index) => <li className={step > index + 1 ? "done" : step === index + 1 ? "current" : ""} key={name}><span>{step > index + 1 ? "✓" : index + 1}</span><strong>{name}</strong></li>)}
-      </ol>
+    <div className="notice" role="status"><strong>สถานะ</strong><span>{notice}</span></div>
 
-      <div className="notice" role="status"><span>สถานะ</span>{notice}</div>
+    <section className="flow-card" id="brief">
+      <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 1</p><h2>ตั้งโจทย์ของเดือน</h2><p>เลือกลูกค้า เดือน และเรื่องที่อยากผลักดันในเดือนนี้ จะมีหลายโปรดักต์หรือเป็นเรื่องกว้าง ๆ ก็ได้</p></div><span className="pill">AI สร้าง · Planner คัด</span></div>
+      <div className="brief-grid">
+        <label>ลูกค้า<select value={client} onChange={(event) => setClient(event.target.value)}>{clientOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>เดือนที่ต้องการแพลน<input aria-label="เดือนที่ต้องการแพลน" type="month" value={planMonth} onChange={(event) => setPlanMonth(event.target.value)} /></label>
+        <label className="span-two">คอนเซ็ปต์หรือเป้าหมายหลักของเดือน<textarea value={theme} onChange={(event) => setTheme(event.target.value)} placeholder="เช่น เดือนนี้ต้องการให้คนเข้าใจว่า Botox ไม่ได้ทำให้หน้าตึง และพาไปสู่การนัด" /></label>
+        <label>อยากได้กี่ชิ้นในแผน<select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}>{[8, 10, 12, 16, 20].map((number) => <option value={number} key={number}>{number} ชิ้น</option>)}</select></label>
+      </div>
+      <div className="product-briefs"><div className="section-label"><div><strong>โปรดักต์ / เรื่องที่อยากสื่อ</strong><span>เพิ่มได้หลายแถว และใช้ “ไม่ระบุโปรดักต์” สำหรับเรื่องแบรนด์ โปร หรือคอนเทนท์ทั่วไป</span></div><button className="text-button" type="button" onClick={addBrief}>+ เพิ่มเรื่อง</button></div>
+        {briefs.map((brief, index) => <div className="product-row" key={brief.id}><strong className="row-number">{index + 1}</strong><label>โปรดักต์<select aria-label={`โปรดักต์ ${index + 1}`} value={brief.product} onChange={(event) => updateBrief(brief.id, "product", event.target.value)}>{productOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label>อยากให้สื่ออะไร<input value={brief.goal} onChange={(event) => updateBrief(brief.id, "goal", event.target.value)} placeholder="เช่น ชวนคนที่ลังเลให้ทัก" /></label><label>เงื่อนไข / ความต้องการเพิ่ม<input value={brief.customNeed} onChange={(event) => updateBrief(brief.id, "customNeed", event.target.value)} placeholder="เช่น ใช้หมอพูด, มีโปร 2.2" /></label><button className="icon-button" type="button" aria-label={`ลบเรื่องที่ ${index + 1}`} disabled={briefs.length === 1} onClick={() => removeBrief(brief.id)}>×</button></div>)}</div>
+      <div className="action-row"><button className="button button-primary" type="button" onClick={generateIdeas} disabled={isGenerating}>{isGenerating ? "AI กำลังคิด…" : "ให้ AI แตกไอเดีย 36 ชิ้น →"}</button><span>ได้หลายทางเลือกในครั้งเดียว ไม่ใช่ไอเดียตายตัว</span></div>
+    </section>
 
-      <section className="flow-card brief-card">
-        <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 1</p><h2>บอกโจทย์ครั้งเดียว</h2><p>ระบบจะใช้โจทย์นี้สร้างไอเดียหลายมุมให้คัด ไม่ใช่โยนไอเดียเดี่ยวมาให้กด</p></div><span className="step-chip">AI สร้าง · Planner คัด</span></div>
-        <div className="brief-fields">
-          <label>ลูกค้า<select value={client} onChange={(event) => setClient(event.target.value)}>{clientOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-          <label>Program<select value={program} onChange={(event) => setProgram(event.target.value)}><option>Botox</option><option>Filler</option><option>HIFU</option><option>Ultraformer</option><option>Pico</option><option>Package / Offer</option></select></label>
-          <label>Concern<input value={concern} onChange={(event) => setConcern(event.target.value)} /></label>
-          <label>อยากได้กี่ชิ้นในแผน<select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}><option value={8}>8 ชิ้น</option><option value={10}>10 ชิ้น</option><option value={12}>12 ชิ้น</option><option value={16}>16 ชิ้น</option></select></label>
-        </div>
-        {adsOnly && <p className="scope-note"><strong>Ads-only</strong> รายนี้จะได้ข้อเสนอ/คำแนะนำคอนเทนท์ครบ แต่จะไม่ถูกส่งเป็น task ใน Monday</p>}
-        <button className="button button-primary" onClick={generateIdeas} type="button">แตกไอเดีย 36 ชิ้นให้คัด <span>→</span></button>
-      </section>
+    {step >= 2 && <section className="flow-card" id="idea-selection">
+      <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 2</p><h2>คัดชุดไอเดียสำหรับแผนนี้</h2><p>AI คิดมาให้หลายมุม เลือกเป็นชุด ไม่ต้องตัดสินใจและสร้างทีละงาน</p></div><button className="button button-secondary" onClick={selectRecommended} type="button">เลือก {quantity} ชิ้นที่แนะนำ</button></div>
+      <div className="selection-summary"><strong>เลือก {selectedIdeas.length} / {ideas.length} ชิ้น</strong><span>คละโปรดักต์ รูปแบบ และมุมเล่าเพื่อให้ทั้ง feed และ ads ไม่จำเจ</span></div>
+      <div className="idea-grid">{ideas.map((idea) => <button className={`idea-tile ${idea.selected ? "selected" : ""}`} onClick={() => toggleIdea(idea.id)} aria-pressed={idea.selected} type="button" key={idea.id}><span>{idea.selected ? "✓" : "+"} {idea.id} · {idea.format}</span><strong>{idea.title}</strong><p>{idea.hook}</p><em>{idea.product} · {idea.pillar}</em></button>)}</div>
+      <div className="sticky-action"><span><strong>{selectedIdeas.length} ไอเดีย</strong> พร้อมรวมเป็นข้อเสนอ</span><button className="button button-primary" onClick={makeProposal} type="button">ทำสไลด์เสนอแผน →</button></div>
+    </section>}
 
-      {ideas.length > 0 && <section className="flow-card ideas-card">
-        <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 2</p><h2>คัดชุดไอเดีย ไม่ต้องตัดสินใจทีละชิ้น</h2><p>เลือก {selectedIdeas.length} / {quantity} ชิ้น · ระบบคละมุมเล่า รูปแบบ และจุดที่ช่วยต่อบทสนทนาของแอดมิน</p></div><button className="button button-secondary" onClick={selectRecommended} type="button">เลือก {quantity} ชิ้นที่แนะนำ</button></div>
-        <div className="idea-grid">
-          {ideas.map((idea) => <button aria-pressed={idea.selected} className={idea.selected ? "idea-tile selected" : "idea-tile"} key={idea.id} onClick={() => toggleIdea(idea.id)} type="button">
-            <span className="idea-check">{idea.selected ? "✓" : "+"}</span><small>{idea.id} · {idea.format}</small><strong>{idea.title}</strong><p>{idea.hook}</p><em>{idea.pillar}</em>
-          </button>)}
-        </div>
-        <div className="sticky-action"><div><strong>{selectedIdeas.length} ไอเดีย</strong><span>พร้อมรวมเป็นแผนสำหรับลูกค้า</span></div><button className="button button-primary" onClick={makeProposal} type="button">สรุปเป็นแผนและสไลด์ <span>→</span></button></div>
-      </section>}
+    {step >= 3 && <section className="flow-card" id="proposal-slides">
+      <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 3 · สไลด์เสนอ</p><h2>สไลด์คอนเซ็ปต์เดือนนี้</h2><p>แก้ข้อความและเพิ่มบริบทในแต่ละหน้าได้ก่อนนำเสนอ ไม่ใช่แค่รายการหัวข้อคอนเทนท์</p></div><button className="button button-secondary" type="button" onClick={() => window.print()}>พิมพ์ / บันทึก PDF</button></div>
+      <div className="slides-editor">{slides.map((slide, index) => <article className={`proposal-slide ${slide.kind}`} key={slide.id}><span>SLIDE {String(index + 1).padStart(2, "0")}</span><textarea aria-label={`หัวข้อสไลด์ ${index + 1}`} className="slide-title" value={slide.title} onChange={(event) => updateSlide(slide.id, "title", event.target.value)} /><textarea aria-label={`เนื้อหาสไลด์ ${index + 1}`} className="slide-body" value={slide.body} onChange={(event) => updateSlide(slide.id, "body", event.target.value)} /></article>)}</div>
+      <div className="slide-tools"><button className="text-button" type="button" onClick={() => setSlides((current) => [...current, { id: `custom-${Date.now()}`, kind: "custom", title: "หัวข้อสไลด์เพิ่มเติม", body: "พิมพ์ข้อความที่ต้องการนำเสนอ" }])}>+ เพิ่มสไลด์</button><span>แก้ทุกหน้าจากช่องข้อความโดยตรง แล้วใช้ปุ่มพิมพ์เป็น PDF สำหรับส่งลูกค้า</span></div>
+      <div className="approval-panel"><div><strong>ลูกค้าตรวจแผนนี้แล้วหรือยัง?</strong><span>ถ้ายังไม่ผ่าน กลับไปคัดไอเดียหรือแก้สไลด์ก่อนล็อกวันลง</span></div><div><button className="button button-secondary" onClick={() => { setStep(2); scrollToId("idea-selection"); }} type="button">กลับไปปรับ</button><button className="button button-primary" onClick={approveProposal} type="button">ผ่านทั้งแผน → จัดวันลง</button></div></div>
+    </section>}
 
-      {step >= 3 && <section className="flow-card proposal-card">
-        <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 3 · เอกสารเสนอ</p><h2>สรุปเพื่อให้ลูกค้าตัดสินใจทั้งแผน</h2><p>นี่คือหน้าสรุปที่จะใช้เป็นโครงสไลด์: ไม่ให้ลูกค้าตรวจแบบงานกระจัดกระจาย</p></div><span className="step-chip">{selectedIdeas.length} ชิ้น · {client}</span></div>
-        <div className="proposal-summary">
-          <article><span>เป้าหมายหลัก</span><strong>สร้างบทสนทนาที่พาไปสู่การนัด</strong><p>ใช้ {program} ผ่าน concern “{concern}” โดยเริ่มจากความเข้าใจ ไม่ขายโปรทันที</p></article>
-          <article><span>โครงคอนเทนท์</span><strong>Educate 40% · Proof 35% · Convert 25%</strong><p>มีทั้งวิดีโอ ภาพ และอัลบั้ม เพื่อไม่ให้ฟีดจำเจและใช้ยิงแอดได้หลายมุม</p></article>
-          <article><span>สิ่งที่แอดมินใช้ต่อ</span><strong>Hook + เหตุผล + จุดถามกลับ</strong><p>ทุกชิ้นถูกวางให้ทีมแอดมินตอบต่อและชวนจองได้ ไม่ได้เอาแค่ยอด reach</p></article>
-        </div>
-        <div className="proposal-list">{selectedIdeas.map((idea, index) => <div key={idea.id}><span>{String(index + 1).padStart(2, "0")}</span><strong>{idea.title}</strong><small>{idea.format} · {idea.pillar}</small></div>)}</div>
-        <div className="approval-bar"><div><strong>ลูกค้าตรวจแผนนี้แล้วหรือยัง?</strong><span>ถ้ายังไม่ผ่าน ให้ย้อนกลับไปคัด/ปรับชุดไอเดียก่อนล็อกวันลง</span></div><div><button className="button button-secondary" onClick={() => { setStep(2); setNotice("กลับไปปรับชุดไอเดียได้เลย — ข้อเสนอยังไม่ถูกล็อก"); }} type="button">กลับไปปรับ</button><button className="button button-primary" onClick={approveProposal} type="button">ผ่านทั้งแผน → จัดวันลง</button></div></div>
-      </section>}
+    {step >= 4 && <section className="flow-card" id="month-calendar">
+      <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 4</p><h2>วางวันลงตลอดทั้งเดือน</h2><p>ลงได้ทุกวัน ระบบดูว่าวันไหนมีงานกี่ชิ้นและเป็นรูปแบบอะไร เพื่อไม่ให้กระจุกในวันเดียวหรือชนรูปแบบเดิม</p></div><button className="button button-primary" onClick={schedulePlan} type="button">กระจายวันลงอัตโนมัติ</button></div>
+      <div className="calendar-summary"><strong>{new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric" }).format(localDateFromIso(`${planMonth}-01`))}</strong><span>งานเดิมในเดือนนี้ {monthExisting.length} ชิ้น · ระบบพิจารณาจำนวนงานรวม + จำนวนงานแต่ละประเภทต่อวัน</span></div>
+      <div className="calendar-grid">{monthDates.map((date) => { const oldItems = monthExisting.filter((item) => item.date === date); const newItems = scheduledIdeas.filter((idea) => idea.date === date); return <article className={`calendar-day ${newItems.length ? "planned" : ""}`} key={date}><time>{localDateFromIso(date).getDate()}</time><span className="calendar-load">{oldItems.length + newItems.length ? `${oldItems.length + newItems.length} งาน` : "ว่าง"}</span>{oldItems.map((item) => <small className="existing" key={item.title}>{item.format} · {item.title}</small>)}{newItems.map((item) => <small className="planned-item" key={item.id}>{item.format} · {item.id}</small>)}</article>; })}</div>
+      {step === 5 && <div className="schedule-result"><strong>ตรวจแล้ว: {scheduledIdeas.length} ชิ้นมีวันลงครบ</strong><span>กระจายทั้งเดือน {planMonth} โดยไม่ตัดวันหยุดหรือสุดสัปดาห์</span></div>}
+    </section>}
 
-      {step >= 4 && <section className="flow-card schedule-card">
-        <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 4</p><h2>จัดวันลงให้ไม่ชนงานอื่น</h2><p>ระบบจะข้ามเสาร์-อาทิตย์ วันหยุด และวันที่มีงานบน Monday อยู่แล้ว จากนั้นให้ Planner ตรวจอีกครั้ง</p></div><button className="button button-primary" onClick={schedulePlan} type="button">จัดวันลงอัตโนมัติ</button></div>
-        <div className="calendar-legend"><span className="busy">งานใน Monday</span><span className="holiday">วันหยุด</span><span className="free">วันว่างที่ใช้ได้</span></div>
-        <div className="schedule-grid">
-          {["2026-07-24", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"].map((date) => {
-            const assigned = scheduledIdeas.find((idea) => idea.date === date);
-            const blocked = blockedDates.get(date);
-            const weekend = [0, 6].includes(localDateFromIso(date).getDay());
-            return <div className={assigned ? "schedule-day assigned" : blocked ? blocked.includes("วันหยุด") ? "schedule-day holiday" : "schedule-day busy" : weekend ? "schedule-day weekend" : "schedule-day"} key={date}><time>{thaiDate(date)}</time><span>{assigned ? assigned.id : blocked ?? (weekend ? "วันหยุดสุดสัปดาห์" : "ว่าง")}</span></div>;
-          })}
-        </div>
-        {step === 5 && <div className="schedule-result"><strong>ตรวจแล้ว: {scheduledIdeas.length} ชิ้นมีวันลงครบ</strong><span>ไม่ชน {Array.from(blockedDates.values()).filter((value) => !value.includes("วันหยุด")).length} งานเดิม และข้ามวันหยุด 1 วัน</span></div>}
-      </section>}
+    {step === 5 && <section className="flow-card" id="monday-destination">
+      <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 5 · ส่งงาน</p><h2>เลือกปลายทาง Monday แล้วค่อยยืนยัน</h2><p>ระบบจะตั้งชื่อให้ตาม ลูกค้า · เดือน · ลำดับชิ้นในเดือน · โปรดักต์ · หัวข้อคอนเทนท์</p></div><span className="pill">พร้อมตรวจ</span></div>
+      {adsOnly ? <div className="ads-only"><strong>ลูกค้ารายนี้เป็น Ads-only</strong><span>จบที่สไลด์และคำแนะนำคอนเทนท์ จึงไม่มีการสร้างงานเข้า Monday</span></div> : <><div className="destination-grid"><label>Board<select aria-label="Board" disabled><option>Marktech : Content (Jul 2026)</option></select></label><label>Group ปลายทาง<select aria-label="Group ปลายทาง" value={groupId} onChange={(event) => setGroupId(event.target.value)}>{groupOptions.map((group) => <option value={group.id} key={group.id}>{group.label}</option>)}</select></label><div><span>จำนวนที่จะสร้าง</span><strong>{selectedIdeas.length} งาน</strong><small>มีวันที่ลงครบทุกชิ้น</small></div></div><div className="monday-preview"><strong>ตัวอย่างชื่อที่จะสร้าง</strong>{selectedIdeas.slice(0, 3).map((idea, index) => <span key={idea.id}>{titleForMonday(client, planMonth, index + 1, idea)}</span>)}{selectedIdeas.length > 3 && <small>…และอีก {selectedIdeas.length - 3} งาน</small>}</div><div className="action-row"><button className="button button-primary" onClick={openMondayConfirmation} type="button">ตรวจ {selectedIdeas.length} งานก่อนส่ง →</button><span>ยังไม่มีงานถูกสร้างจนกว่าจะยืนยันในหน้าถัดไป</span></div></>}
+    </section>}
 
-      {step >= 5 && <section className="flow-card monday-card">
-        <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 5 · ส่งงาน</p><h2>เลือกปลายทาง Monday แล้วค่อยยืนยัน</h2><p>ก่อนส่ง ระบบแสดงให้เห็นชัดว่าอะไรจะถูกสร้าง ที่บอร์ดไหน และกลุ่มไหน</p></div><span className={adsOnly ? "step-chip muted" : "step-chip"}>{adsOnly ? "Ads-only" : "พร้อมตรวจ"}</span></div>
-        <div className="monday-destination">
-          <label>Board<select disabled={adsOnly}><option>Marktech : Content (Jul 2026)</option></select></label>
-          <label>Group ปลายทาง<select disabled={adsOnly} onChange={(event) => setGroup(event.target.value)} value={group}>{groupOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-          <div><span>จำนวนที่จะสร้าง</span><strong>{selectedIdeas.length} งาน</strong><small>มีวันที่ลงครบทุกชิ้น</small></div>
-        </div>
-        <div className="monday-actions"><div><strong>{adsOnly ? "จบงานที่ข้อเสนอคอนเทนท์" : `ปลายทาง: ${group}`}</strong><span>{adsOnly ? "ส่งเป็นเอกสารแนะนำให้ลูกค้านำไปทำเอง" : "ยังไม่มีงานถูกสร้างจนกว่าจะกดยืนยันในหน้าถัดไป"}</span></div><button className="button button-primary" onClick={openMondayConfirmation} type="button">{adsOnly ? "ยืนยันข้อเสนอ Ads-only" : `ตรวจ ${selectedIdeas.length} งานก่อนส่ง →`}</button></div>
-      </section>}
-    </div>
-
-    {showConfirm && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><section className="confirm-modal"><p className="eyebrow">ก่อนส่งจริง</p><h2 id="confirm-title">ยืนยันสร้าง {selectedIdeas.length} งานใน Monday</h2><p>Board: <strong>Marktech : Content (Jul 2026)</strong> · Group: <strong>{group}</strong></p><div className="confirm-list">{selectedIdeas.map((idea) => <div key={idea.id}><span>{idea.id}</span><strong>{idea.title}</strong><time>{idea.date ? thaiDate(idea.date) : "ยังไม่มีวัน"}</time></div>)}</div><div className="modal-actions"><button className="button button-secondary" onClick={() => setShowConfirm(false)} type="button">กลับไปแก้</button><button className="button button-primary" onClick={confirmMonday} type="button">ยืนยันส่ง {selectedIdeas.length} งาน</button></div></section></div>}
+    {showConfirm && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><section className="confirm-modal"><p className="eyebrow">ก่อนส่งจริง</p><h2 id="confirm-title">ยืนยันสร้าง {selectedIdeas.length} งานใน Monday</h2><p>Board: <strong>Marktech : Content (Jul 2026)</strong> · Group: <strong>{activeGroup.label}</strong></p><div className="confirm-list">{selectedIdeas.map((idea, index) => <div key={idea.id}><span>{idea.id}</span><strong>{titleForMonday(client, planMonth, index + 1, idea)}</strong><time>{idea.date ? thaiDate(idea.date) : "ยังไม่มีวัน"}</time></div>)}</div><div className="modal-actions"><button className="button button-secondary" onClick={() => setShowConfirm(false)} type="button">กลับไปแก้</button><button className="button button-primary" onClick={confirmMonday} type="button">ยืนยันส่ง {selectedIdeas.length} งาน</button></div></section></div>}
   </main>;
 }

@@ -8,6 +8,11 @@ type CreateMondayTaskRequest = {
   scheduledFor?: string;
 };
 
+type CreateMondayTasksRequest = {
+  groupId?: string;
+  tasks?: CreateMondayTaskRequest[];
+};
+
 const formatLabels: Record<string, string> = {
   "วิดีโอ": "วีดิโอ",
   "ภาพนิ่ง": "ภาพ",
@@ -25,8 +30,9 @@ const createItemMutation = `
 `;
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as Partial<CreateMondayTaskRequest>;
-  if (!body.contentId || !body.title || !body.client || !body.format) {
+  const body = (await request.json()) as Partial<CreateMondayTaskRequest & CreateMondayTasksRequest>;
+  const tasks = body.tasks ?? (body.contentId ? [body as CreateMondayTaskRequest] : []);
+  if (!tasks.length || tasks.some((task) => !task.contentId || !task.title || !task.client || !task.format)) {
     return NextResponse.json(
       { error: "contentId, title, client and format are required" },
       { status: 400 },
@@ -46,39 +52,35 @@ export async function POST(request: Request) {
     );
   }
 
-  const mondayFormat = formatLabels[body.format] ?? body.format;
-  const columnValues: Record<string, unknown> = {
-    // Dropdown columns require their visible labels.  This keeps the app's
-    // Thai wording separate from the spelling currently used on the board.
-    dropdown14: { labels: [body.client] },
-    dropdown9: { labels: [mondayFormat] },
-  };
-  if (body.scheduledFor) columnValues.date6 = { date: body.scheduledFor };
-
-  const response = await fetch("https://api.monday.com/v2", {
-    method: "POST",
-    headers: {
-      Authorization: token,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: createItemMutation,
-      variables: {
-        boardId,
-        groupId: process.env.MONDAY_DEFAULT_GROUP_ID,
-        itemName: `[${body.contentId}] ${body.title}`,
-        columnValues: JSON.stringify(columnValues),
-      },
-    }),
-  });
-
-  const result = await response.json();
-  if (!response.ok || result.errors) {
-    return NextResponse.json(
-      { error: "Monday rejected the task", details: result.errors ?? result },
-      { status: 502 },
-    );
+  const created: { id: string; name: string }[] = [];
+  for (const task of tasks) {
+    const mondayFormat = formatLabels[task.format] ?? task.format;
+    const columnValues: Record<string, unknown> = {
+      dropdown14: { labels: [task.client] },
+      dropdown9: { labels: [mondayFormat] },
+    };
+    if (task.scheduledFor) columnValues.date6 = { date: task.scheduledFor };
+    const response = await fetch("https://api.monday.com/v2", {
+      method: "POST",
+      headers: { Authorization: token, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: createItemMutation,
+        variables: {
+          boardId,
+          groupId: body.groupId || process.env.MONDAY_DEFAULT_GROUP_ID,
+          itemName: task.title,
+          columnValues: JSON.stringify(columnValues),
+        },
+      }),
+    });
+    const result = await response.json() as { errors?: unknown; data?: { create_item?: { id: string; name: string } } };
+    if (!response.ok || result.errors || !result.data?.create_item) {
+      return NextResponse.json(
+        { error: "Monday rejected the task", created: created.length, details: result.errors ?? result },
+        { status: 502 },
+      );
+    }
+    created.push(result.data.create_item);
   }
-
-  return NextResponse.json({ item: result.data.create_item });
+  return NextResponse.json({ created: created.length, items: created });
 }
