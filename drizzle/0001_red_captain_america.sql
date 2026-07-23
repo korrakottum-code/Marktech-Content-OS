@@ -1,0 +1,1 @@
+ALTER TABLE `monday_board_mappings` ADD `default_group_name` text;

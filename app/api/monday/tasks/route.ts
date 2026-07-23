@@ -9,6 +9,7 @@ type CreateMondayTaskRequest = {
 };
 
 type CreateMondayTasksRequest = {
+  boardId?: string;
   groupId?: string;
   tasks?: CreateMondayTaskRequest[];
 };
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   }
 
   const token = process.env.MONDAY_API_TOKEN;
-  const boardId = process.env.MONDAY_CONTENT_BOARD_ID;
+  const boardId = body.boardId || process.env.MONDAY_CONTENT_BOARD_ID;
   if (!token || !boardId) {
     return NextResponse.json(
       {

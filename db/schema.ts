@@ -53,6 +53,7 @@ export const mondayBoardMappings = sqliteTable(
     boardId: text("board_id").notNull(),
     boardName: text("board_name").notNull(),
     defaultGroupId: text("default_group_id"),
+    defaultGroupName: text("default_group_name"),
     clientColumnId: text("client_column_id"),
     formatColumnId: text("format_column_id"),
     dateColumnId: text("date_column_id"),

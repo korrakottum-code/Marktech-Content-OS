@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { env } from "cloudflare:workers";
 
 type ProductBrief = { id?: string; product?: string; goal?: string; customNeed?: string };
 type GeneratedIdea = {
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
     theme?: string;
     quantity?: number;
     briefs?: ProductBrief[];
+    industry?: string;
+    reusePolicy?: "avoid" | "adapt";
   } | null;
   if (!input?.client || !input.planMonth || !Array.isArray(input.briefs) || input.briefs.length === 0) {
     return NextResponse.json({ error: "Missing planning brief" }, { status: 400 });
@@ -53,14 +56,26 @@ export async function POST(request: Request) {
   }
 
   const target = Math.max(30, Math.min(40, Math.round((input.quantity ?? 12) * 2.5)));
+  const priorContent = env.DB ? await env.DB.prepare(
+    `SELECT content_items.title, content_items.hook, content_items.pillar
+       FROM content_items JOIN clients ON clients.id = content_items.client_id
+       WHERE clients.name = ?1 AND content_items.status IN ('approved', 'sent_to_monday')
+       ORDER BY content_items.created_at DESC LIMIT 80`,
+  ).bind(input.client).all<{ title: string; hook: string | null; pillar: string | null }>() : { results: [] };
+  const priorText = priorContent.results.map((item) => `${item.title}${item.hook ? ` | ${item.hook}` : ""}`).join("\n");
   const instructions = `
-คุณคือ Senior Content Strategist ของ performance media agency สำหรับคลินิกความงามในไทย
+คุณคือ Senior Content Strategist ของ performance media agency ในไทย
 
-เป้าหมาย: สร้างไอเดียคอนเทนท์ที่ช่วยให้คนเข้าใจ เกิดความเชื่อใจ และพาไปสู่การทักแชต/นัด ไม่ใช่คอนเทนท์เพื่อยอด reach อย่างเดียว
+อุตสาหกรรมของลูกค้าคือ ${input.industry || "คลินิกความงาม"}. ปรับภาษา มุมเล่า และคำเตือนให้เหมาะกับอุตสาหกรรมนั้น; อย่าตั้งสมมติฐานว่าเป็นคลินิกหากไม่ได้ระบุว่าเป็นคลินิก
+เป้าหมาย: สร้างไอเดียคอนเทนท์ที่ช่วยให้คนเข้าใจ เกิดความเชื่อใจ และพาไปสู่การทักแชต/นัด/ซื้อ ไม่ใช่คอนเทนท์เพื่อยอด reach อย่างเดียว
 ต้องคิดใหม่จาก brief นี้ ห้ามใช้ไอเดียซ้ำถ้อยคำหรือโครงเดิมมากเกินไป
 สร้าง IDEA_COUNT ไอเดีย คละ format วิดีโอ ภาพ อัลบั้ม และคละ funnel/pillar เช่น pain point, educate, proof, objection, compare, FAQ, offer bridge, social proof
 ถ้ามีหลายโปรดักต์ ต้องกระจายตามน้ำหนักของ brief และยังมีคอนเทนท์ภาพรวมของแบรนด์ได้เมื่อเหมาะสม
 ทุกไอเดียต้องมี title, hook, reason, adminAngle ที่นำไปใช้จริงได้ และอยู่ในภาษาไทย
+
+ประวัติคอนเทนท์ที่ทีมเคยอนุมัติสำหรับลูกค้ารายนี้:
+${priorText || "ยังไม่มีประวัติ"}
+นโยบายความซ้ำ: ${input.reusePolicy === "adapt" ? "ต่อยอด hook ที่เคยดีได้ แต่ต้องเปลี่ยน product, angle และชื่อเรื่องให้ชัดเจน" : "ห้ามเสนอชื่อเรื่องหรือ hook ซ้ำกับประวัติข้างต้น; ต้องหามุมเล่าใหม่"}
 
 ตอบเป็น JSON เท่านั้น ตามรูปแบบ {"ideas":[{"product":"","title":"","hook":"","reason":"","adminAngle":"","format":"วิดีโอ|ภาพ|อัลบั้ม","pillar":""}]}
 `;
@@ -68,6 +83,7 @@ export async function POST(request: Request) {
     client: input.client,
     planMonth: input.planMonth,
     monthlyConcept: input.theme || "ยังไม่ได้ระบุ",
+    industry: input.industry || "คลินิกความงาม",
     contentTarget: input.quantity,
     productsAndNeeds: input.briefs.map(({ id: _id, ...item }) => item),
   };
