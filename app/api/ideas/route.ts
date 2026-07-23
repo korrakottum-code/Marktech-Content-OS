@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const target = Math.max(30, Math.min(40, Math.round((input.quantity ?? 12) * 3)));
+  const target = Math.max(30, Math.min(40, Math.round((input.quantity ?? 12) * 2.5)));
   const instructions = `
 คุณคือ Senior Content Strategist ของ performance media agency สำหรับคลินิกความงามในไทย
 
@@ -76,8 +76,10 @@ export async function POST(request: Request) {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: process.env.OPENAI_CONTENT_MODEL ?? "gpt-5.6",
+      model: process.env.OPENAI_CONTENT_MODEL ?? "gpt-5.6-terra",
       input: [{ role: "developer", content: [{ type: "input_text", text: instructions }] }, { role: "user", content: [{ type: "input_text", text: JSON.stringify(brief) }] }],
+      reasoning: { effort: "low" },
+      max_output_tokens: 12000,
       text: { format: { type: "json_object" } },
     }),
   });
