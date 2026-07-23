@@ -11,6 +11,9 @@ type GeneratedIdea = {
   adminAngle: string;
   format: "วิดีโอ" | "ภาพ" | "อัลบั้ม";
   pillar: string;
+  category: "โปรโมชั่น / Offer" | "รีวิว / Proof" | "ความรู้ / FAQ" | "แบรนด์ / ไลฟ์สไตล์";
+  visualDirection: string;
+  adaptation: string;
 };
 
 function cleanIdeas(value: unknown) {
@@ -26,6 +29,9 @@ function cleanIdeas(value: unknown) {
       adminAngle: String(idea.adminAngle ?? "").slice(0, 240),
       format: ["วิดีโอ", "ภาพ", "อัลบั้ม"].includes(idea.format) ? idea.format : "ภาพ",
       pillar: String(idea.pillar ?? "Content idea").slice(0, 80),
+      category: ["โปรโมชั่น / Offer", "รีวิว / Proof", "ความรู้ / FAQ", "แบรนด์ / ไลฟ์สไตล์"].includes(idea.category) ? idea.category : "โปรโมชั่น / Offer",
+      visualDirection: String(idea.visualDirection ?? "ภาพโปรโมชันที่มีพื้นที่วางข้อความ").slice(0, 240),
+      adaptation: String(idea.adaptation ?? "สร้างมุมใหม่จากโจทย์เดือนนี้").slice(0, 220),
     }))
     .filter((idea) => idea.title && idea.hook && idea.reason && idea.adminAngle);
 }
@@ -39,6 +45,7 @@ export async function POST(request: Request) {
     briefs?: ProductBrief[];
     industry?: string;
     reusePolicy?: "avoid" | "adapt";
+    promotionMix?: number;
   } | null;
   if (!input?.client || !input.planMonth || !Array.isArray(input.briefs) || input.briefs.length === 0) {
     return NextResponse.json({ error: "Missing planning brief" }, { status: 400 });
@@ -55,29 +62,35 @@ export async function POST(request: Request) {
     );
   }
 
-  const target = Math.max(30, Math.min(40, Math.round((input.quantity ?? 12) * 2.5)));
-  const priorContent = env.DB ? await env.DB.prepare(
+  const target = 36;
+  const promotionMix = Math.max(30, Math.min(75, Math.round(input.promotionMix ?? 50)));
+  let priorContent: { results: { title: string; hook: string | null; pillar: string | null }[] } = { results: [] };
+  try {
+    priorContent = env.DB ? await env.DB.prepare(
     `SELECT content_items.title, content_items.hook, content_items.pillar
        FROM content_items JOIN clients ON clients.id = content_items.client_id
        WHERE clients.name = ?1 AND content_items.status IN ('approved', 'sent_to_monday')
        ORDER BY content_items.created_at DESC LIMIT 80`,
-  ).bind(input.client).all<{ title: string; hook: string | null; pillar: string | null }>() : { results: [] };
+    ).bind(input.client).all<{ title: string; hook: string | null; pillar: string | null }>() : { results: [] };
+  } catch { priorContent = { results: [] }; }
   const priorText = priorContent.results.map((item) => `${item.title}${item.hook ? ` | ${item.hook}` : ""}`).join("\n");
   const instructions = `
 คุณคือ Senior Content Strategist ของ performance media agency ในไทย
 
 อุตสาหกรรมของลูกค้าคือ ${input.industry || "คลินิกความงาม"}. ปรับภาษา มุมเล่า และคำเตือนให้เหมาะกับอุตสาหกรรมนั้น; อย่าตั้งสมมติฐานว่าเป็นคลินิกหากไม่ได้ระบุว่าเป็นคลินิก
 เป้าหมาย: สร้างไอเดียคอนเทนท์ที่ช่วยให้คนเข้าใจ เกิดความเชื่อใจ และพาไปสู่การทักแชต/นัด/ซื้อ ไม่ใช่คอนเทนท์เพื่อยอด reach อย่างเดียว
-ต้องคิดใหม่จาก brief นี้ ห้ามใช้ไอเดียซ้ำถ้อยคำหรือโครงเดิมมากเกินไป
-สร้าง IDEA_COUNT ไอเดีย คละ format วิดีโอ ภาพ อัลบั้ม และคละ funnel/pillar เช่น pain point, educate, proof, objection, compare, FAQ, offer bridge, social proof
+สร้าง IDEA_COUNT ไอเดีย โดยประมาณ ${promotionMix}% ต้องเป็น category "โปรโมชั่น / Offer" ที่ขายได้จริง: ราคา/สิทธิพิเศษ/แพ็กเกจ/ช่วงเวลา/ของแถม/โปรคู่/ข้อเสนอให้ทัก ไม่ใช่แค่คำว่าโปรโมชันลอย ๆ
+ส่วนที่เหลือจึงค่อยกระจายเป็น "รีวิว / Proof", "ความรู้ / FAQ", "แบรนด์ / ไลฟ์สไตล์" โดย "ความรู้ / FAQ" ห้ามเกิน 20% เว้นแต่ brief บังคับ
+หัวข้อทุกอันต้องเป็นภาษาที่ลูกค้าเห็นแล้วเข้าใจทันทีว่าโพสต์ขายอะไร ห้ามใช้หัวข้อกว้างหรือประหลาด เช่น "เปลี่ยนมุมมอง" หรือ "เปิดโลกใหม่"
+คละ format วิดีโอ ภาพ อัลบั้มตามความเหมาะสมกับชิ้นงาน ไม่ต้องบังคับสัดส่วนเท่ากัน
 ถ้ามีหลายโปรดักต์ ต้องกระจายตามน้ำหนักของ brief และยังมีคอนเทนท์ภาพรวมของแบรนด์ได้เมื่อเหมาะสม
 ทุกไอเดียต้องมี title, hook, reason, adminAngle ที่นำไปใช้จริงได้ และอยู่ในภาษาไทย
 
 ประวัติคอนเทนท์ที่ทีมเคยอนุมัติสำหรับลูกค้ารายนี้:
 ${priorText || "ยังไม่มีประวัติ"}
-นโยบายความซ้ำ: ${input.reusePolicy === "adapt" ? "ต่อยอด hook ที่เคยดีได้ แต่ต้องเปลี่ยน product, angle และชื่อเรื่องให้ชัดเจน" : "ห้ามเสนอชื่อเรื่องหรือ hook ซ้ำกับประวัติข้างต้น; ต้องหามุมเล่าใหม่"}
+นโยบายความซ้ำ: ${input.reusePolicy === "adapt" ? "ใช้หลัก Copy-to-Adapt: ถ้า hook หรือโครงจากประวัติยังดี ให้ต่อยอดได้ โดยระบุใน adaptation ว่าหยิบอะไรมาและเปลี่ยน product, offer, กลุ่มคน หรือบริบทเดือนไหนอย่างไร; ห้ามแค่เปลี่ยนคำ" : "สร้างมุมใหม่เป็นหลัก แต่ไม่ต้องถือว่าทุกความคล้ายเป็นความผิด"}
 
-ตอบเป็น JSON เท่านั้น ตามรูปแบบ {"ideas":[{"product":"","title":"","hook":"","reason":"","adminAngle":"","format":"วิดีโอ|ภาพ|อัลบั้ม","pillar":""}]}
+ตอบเป็น JSON เท่านั้น ตามรูปแบบ {"ideas":[{"product":"","title":"","hook":"","reason":"","adminAngle":"","format":"วิดีโอ|ภาพ|อัลบั้ม","pillar":"","category":"โปรโมชั่น / Offer|รีวิว / Proof|ความรู้ / FAQ|แบรนด์ / ไลฟ์สไตล์","visualDirection":"","adaptation":""}]}
 `;
   const brief = {
     client: input.client,
@@ -85,6 +98,7 @@ ${priorText || "ยังไม่มีประวัติ"}
     monthlyConcept: input.theme || "ยังไม่ได้ระบุ",
     industry: input.industry || "คลินิกความงาม",
     contentTarget: input.quantity,
+    promotionMix,
     productsAndNeeds: input.briefs.map(({ id: _id, ...item }) => item),
   };
 

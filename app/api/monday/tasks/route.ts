@@ -6,6 +6,7 @@ type CreateMondayTaskRequest = {
   client: string;
   format: string;
   scheduledFor?: string;
+  contentBrief?: string;
 };
 
 type CreateMondayTasksRequest = {
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
       {
         error: "Monday push is not configured yet",
         nextStep:
-          "Set MONDAY_API_TOKEN and MONDAY_CONTENT_BOARD_ID as server-side secrets, then add the board column mapping.",
+          "Set MONDAY_API_TOKEN and MONDAY_CONTENT_BOARD_ID as server-side secrets. Set MONDAY_CONTENT_BRIEF_COLUMN_ID too when the task should receive the generated slide brief.",
       },
       { status: 503 },
     );
@@ -61,6 +62,9 @@ export async function POST(request: Request) {
       dropdown9: { labels: [mondayFormat] },
     };
     if (task.scheduledFor) columnValues.date6 = { date: task.scheduledFor };
+    if (task.contentBrief && process.env.MONDAY_CONTENT_BRIEF_COLUMN_ID) {
+      columnValues[process.env.MONDAY_CONTENT_BRIEF_COLUMN_ID] = task.contentBrief;
+    }
     const response = await fetch("https://api.monday.com/v2", {
       method: "POST",
       headers: { Authorization: token, "Content-Type": "application/json" },

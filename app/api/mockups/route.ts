@@ -7,10 +7,10 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "Image AI is not configured", nextStep: "เพิ่ม OPENAI_API_KEY เป็น server secret ก่อนสร้างภาพ" }, { status: 503 });
 
   const prompt = `
-Create one premium social-media campaign mockup image for a presentation slide.
+Create one square 1:1 Facebook feed campaign visual that a graphic designer can use as the real starting point for a post, not a generic presentation cover.
 Industry: ${body.industry || "business"}. Client: ${body.client || "brand"}.
 Content concept: ${body.title}. Context: ${body.body?.slice(0, 500) || body.theme || ""}.
-Use a refined, commercially useful editorial visual in warm ivory, terracotta and natural neutral tones. Make it appropriate for the stated industry, not automatically a beauty clinic. Use a clean composition with generous negative space for Thai slide copy. No written words, no letters, no logos, no watermark, no collage, no before-and-after claim.
+Use a refined, commercially useful editorial visual in warm ivory, terracotta and natural neutral tones. Make it appropriate for the stated industry, not automatically a beauty clinic. Reserve the lower third as clean high-contrast space for the editable Thai headline, offer and CTA that will be overlaid by the app. Do not include written words, letters, logos, watermarks, a collage, or before-and-after claims.
 `;
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",

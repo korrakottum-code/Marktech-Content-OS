@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import PptxGenJS from "pptxgenjs";
 
 type Format = "วิดีโอ" | "ภาพ" | "อัลบั้ม";
 type ProductBrief = { id: string; product: string; goal: string; customNeed: string };
@@ -13,10 +14,13 @@ type Idea = {
   adminAngle: string;
   format: Format;
   pillar: string;
+  category: "โปรโมชั่น / Offer" | "รีวิว / Proof" | "ความรู้ / FAQ" | "แบรนด์ / ไลฟ์สไตล์";
+  visualDirection: string;
+  adaptation: string;
   selected: boolean;
   date?: string;
 };
-type Slide = { id: string; kind: "cover" | "strategy" | "content" | "custom"; title: string; body: string; image?: string; imageLoading?: boolean };
+type Slide = { id: string; kind: "cover" | "summary" | "strategy" | "content" | "custom"; title: string; body: string; ideaId?: string; postHeadline?: string; postOffer?: string; postCta?: string; image?: string; imageLoading?: boolean };
 type ExistingWork = { date: string; format: Format; title: string };
 type BoardGroup = { label: string; id: string };
 type BoardOption = { id: string; name: string; groups: BoardGroup[] };
@@ -78,14 +82,21 @@ function titleForMonday(client: string, month: string, number: number, idea: Ide
 
 function buildSlides(client: string, month: string, theme: string, ideas: Idea[]) {
   const monthLabel = new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric" }).format(localDateFromIso(`${month}-01`));
+  const categories = ideas.reduce<Record<string, number>>((summary, idea) => ({ ...summary, [idea.category]: (summary[idea.category] ?? 0) + 1 }), {});
+  const summary = Object.entries(categories).map(([category, count]) => `${category} ${count} ชิ้น`).join(" · ");
   return [
     { id: "slide-cover", kind: "cover" as const, title: `Content Plan · ${client}`, body: `${monthLabel}\nคอนเซ็ปต์ประจำเดือน: ${theme || "สร้างบทสนทนาที่พาไปสู่การนัด"}`, image: "/mockups/monthly-concept-beauty.png" },
-    { id: "slide-strategy", kind: "strategy" as const, title: "แนวคิดและบทบาทของแผน", body: "ใช้คอนเทนท์หลายมุมเพื่อพาคนจากปัญหา → ความเข้าใจ → ความมั่นใจ → การทักแชต\n\nทุกชิ้นต้องมี Hook ที่ชัด เหตุผลรองรับ และคำถามที่แอดมินใช้ตอบต่อได้" },
+    { id: "slide-summary", kind: "summary" as const, title: `สรุปแผน ${ideas.length} คอนเทนท์`, body: `สัดส่วน: ${summary}\n\n${ideas.map((idea, index) => `${String(index + 1).padStart(2, "0")}. ${idea.category} · ${idea.product} · ${idea.title}\n   เนื้อหา: ${idea.hook}`).join("\n")}` },
+    { id: "slide-strategy", kind: "strategy" as const, title: "แนวคิดและบทบาทของแผน", body: "ครึ่งหนึ่งของแผนเน้นข้อเสนอที่ตัดสินใจได้จริง อีกครึ่งใช้รีวิว ความรู้ และภาพลักษณ์เพื่อช่วยปิดข้อกังวลก่อนทักแชต\n\nทุกชิ้นมี Hook, เหตุผล, CTA และตัวอย่างภาพโพสต์ Facebook ที่ทีมผลิตนำไปต่อได้" },
     ...ideas.map((idea, index) => ({
       id: `slide-${idea.id}`,
       kind: "content" as const,
+      ideaId: idea.id,
       title: `${String(index + 1).padStart(2, "0")} · ${idea.title}`,
-      body: `รูปแบบ: ${idea.format}\nมุมเล่า: ${idea.pillar}\n\nHook: ${idea.hook}\n\nเหตุผลที่ควรทำ: ${idea.reason}\n\nแอดมินต่อบทสนทนา: ${idea.adminAngle}`,
+      body: `ประเภท: ${idea.category} · รูปแบบ: ${idea.format}\nมุมเล่า: ${idea.pillar}\n\nHook: ${idea.hook}\n\nเหตุผลที่ควรทำ: ${idea.reason}\n\nแอดมินต่อบทสนทนา: ${idea.adminAngle}\n\nCopy-to-Adapt: ${idea.adaptation}\nVisual: ${idea.visualDirection}`,
+      postHeadline: idea.title,
+      postOffer: idea.category === "โปรโมชั่น / Offer" ? idea.hook : idea.product,
+      postCta: "ทักแชตเพื่อรับรายละเอียด",
     })),
   ];
 }
@@ -121,10 +132,11 @@ export default function Home() {
   const [client, setClient] = useState("NV");
   const [serviceScope, setServiceScope] = useState<"content" | "ads_only">("content");
   const [industry, setIndustry] = useState("คลินิกความงาม");
-  const [reusePolicy, setReusePolicy] = useState<"avoid" | "adapt">("avoid");
+  const [reusePolicy, setReusePolicy] = useState<"avoid" | "adapt">("adapt");
   const [planMonth, setPlanMonth] = useState(monthNow);
   const [theme, setTheme] = useState("เพิ่มบทสนทนาที่มีโอกาสนัด และมีคอนเทนท์ที่ใช้ยิงแอดต่อได้");
   const [quantity, setQuantity] = useState(12);
+  const [promotionMix, setPromotionMix] = useState(50);
   const [briefs, setBriefs] = useState<ProductBrief[]>([{ id: "brief-1", product: "Botox", goal: "แก้ concern ริ้วรอยและทำให้กล้าทัก", customNeed: "" }]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [slides, setSlides] = useState<Slide[]>([]);
@@ -140,6 +152,7 @@ export default function Home() {
   const [ideaFormatFilter, setIdeaFormatFilter] = useState("ทั้งหมด");
   const [ideaProductFilter, setIdeaProductFilter] = useState("ทั้งหมด");
   const [ideaPillarFilter, setIdeaPillarFilter] = useState("ทั้งหมด");
+  const [ideaCategoryFilter, setIdeaCategoryFilter] = useState("ทั้งหมด");
   const [showConfirm, setShowConfirm] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [notice, setNotice] = useState("ตั้งเดือน เป้าหมาย และหัวข้อที่อยากสื่อ แล้วให้ AI แตกหลายทางเลือกในครั้งเดียว");
@@ -151,9 +164,10 @@ export default function Home() {
   const activeGroup = activeBoard.groups.find((group) => group.id === groupId) ?? activeBoard.groups[0];
   const monthDates = useMemo(() => daysInMonth(planMonth), [planMonth]);
   const monthExisting = useMemo(() => existingWork.filter((work) => work.date.startsWith(planMonth)), [planMonth]);
-  const visibleIdeas = useMemo(() => ideas.filter((idea) => (ideaFormatFilter === "ทั้งหมด" || idea.format === ideaFormatFilter) && (ideaProductFilter === "ทั้งหมด" || idea.product === ideaProductFilter) && (ideaPillarFilter === "ทั้งหมด" || idea.pillar === ideaPillarFilter)), [ideas, ideaFormatFilter, ideaProductFilter, ideaPillarFilter]);
+  const visibleIdeas = useMemo(() => ideas.filter((idea) => (ideaFormatFilter === "ทั้งหมด" || idea.format === ideaFormatFilter) && (ideaProductFilter === "ทั้งหมด" || idea.product === ideaProductFilter) && (ideaPillarFilter === "ทั้งหมด" || idea.pillar === ideaPillarFilter) && (ideaCategoryFilter === "ทั้งหมด" || idea.category === ideaCategoryFilter)), [ideas, ideaFormatFilter, ideaProductFilter, ideaPillarFilter, ideaCategoryFilter]);
   const ideaProducts = useMemo(() => Array.from(new Set(ideas.map((idea) => idea.product))), [ideas]);
   const ideaPillars = useMemo(() => Array.from(new Set(ideas.map((idea) => idea.pillar))), [ideas]);
+  const ideaCategories = useMemo(() => Array.from(new Set(ideas.map((idea) => idea.category))), [ideas]);
 
   useEffect(() => {
     fetch("/api/monday/boards")
@@ -196,14 +210,17 @@ export default function Home() {
       const response = await fetch("/api/ideas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client, planMonth, theme, quantity, briefs: usableBriefs, industry, reusePolicy }),
+        body: JSON.stringify({ client, planMonth, theme, quantity, promotionMix, briefs: usableBriefs, industry, reusePolicy }),
       });
       const payload = await response.json() as { ideas?: Omit<Idea, "selected" | "date">[]; error?: string; nextStep?: string };
       if (!response.ok || !payload.ideas) throw new Error(payload.nextStep ?? payload.error ?? "AI ยังสร้างไอเดียไม่ได้");
-      setIdeas(payload.ideas.map((idea, index) => ({ ...idea, id: idea.id || `IDEA-${String(index + 1).padStart(2, "0")}`, selected: index < quantity })));
+      const promoted = payload.ideas.filter((idea) => idea.category === "โปรโมชั่น / Offer");
+      const remaining = payload.ideas.filter((idea) => idea.category !== "โปรโมชั่น / Offer");
+      const recommendedIds = new Set([...promoted.slice(0, Math.round(quantity * promotionMix / 100)), ...remaining.slice(0, quantity - Math.round(quantity * promotionMix / 100))].map((idea) => idea.id));
+      setIdeas(payload.ideas.map((idea, index) => ({ ...idea, id: idea.id || `IDEA-${String(index + 1).padStart(2, "0")}`, selected: recommendedIds.has(idea.id || `IDEA-${String(index + 1).padStart(2, "0")}`) })));
       setSlides([]);
       setStep(2);
-      setNotice(`AI สร้าง ${payload.ideas.length} ไอเดียแล้ว — ระบบเลือก ${quantity} ชิ้นแรกที่คละรูปแบบไว้ให้ คุณคัดหรือปรับเพิ่มได้`);
+      setNotice(`AI สร้าง ${payload.ideas.length} ทางเลือกแล้ว — ระบบเลือก ${quantity} ชิ้นตามสัดส่วน Promotion ${promotionMix}% ให้ คุณคัดหรือเพิ่มได้`);
       scrollToId("idea-selection");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "ยังเชื่อม AI ไม่สำเร็จ");
@@ -217,8 +234,12 @@ export default function Home() {
   }
 
   function selectRecommended() {
-    setIdeas((current) => current.map((idea, index) => ({ ...idea, selected: index < quantity })));
-    setNotice(`เลือก ${quantity} ชิ้นที่ AI จัดให้คละโปรดักต์ มุมเล่า และรูปแบบแล้ว`);
+    setIdeas((current) => {
+      const promotionCount = Math.round(quantity * promotionMix / 100);
+      const chosen = new Set([...current.filter((idea) => idea.category === "โปรโมชั่น / Offer").slice(0, promotionCount), ...current.filter((idea) => idea.category !== "โปรโมชั่น / Offer").slice(0, quantity - promotionCount)].map((idea) => idea.id));
+      return current.map((idea) => ({ ...idea, selected: chosen.has(idea.id) }));
+    });
+    setNotice(`เลือก ${quantity} ชิ้นตาม Promotion ${promotionMix}% แล้ว — กดเพิ่มชิ้นอื่นจาก 36 ทางเลือกได้เสมอ`);
   }
 
   function clearSelection() {
@@ -262,6 +283,40 @@ export default function Home() {
       setNotice(error instanceof Error ? error.message : "สร้างภาพ mockup ไม่สำเร็จ");
       setSlides((current) => current.map((item) => item.id === slide.id ? { ...item, imageLoading: false } : item));
     }
+  }
+
+  function updateSlideField(id: string, field: "postHeadline" | "postOffer" | "postCta", value: string) {
+    setSlides((current) => current.map((slide) => slide.id === id ? { ...slide, [field]: value } : slide));
+  }
+
+  async function downloadPresentation() {
+    if (!slides.length) return setNotice("สร้างสไลด์ก่อนดาวน์โหลด");
+    const pptx = new PptxGenJS();
+    pptx.layout = "LAYOUT_WIDE";
+    pptx.author = "Marktech Content OS";
+    pptx.subject = `Content plan for ${client}`;
+    pptx.title = `Content Plan ${client} ${planMonth}`;
+    pptx.lang = "th-TH";
+    for (const [index, source] of slides.entries()) {
+      const slide = pptx.addSlide();
+      slide.background = { color: source.kind === "cover" ? "5C3729" : "FFF9F2" };
+      slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.333, h: 0.18, fill: { color: "A55E42" }, line: { color: "A55E42" } });
+      slide.addText(`MARKTECH CONTENT OS  |  ${String(index + 1).padStart(2, "0")}`, { x: 0.55, y: 0.35, w: 7.4, h: 0.22, fontFace: "Aptos", fontSize: 8, bold: true, color: source.kind === "cover" ? "F0CBB4" : "A55E42", charSpacing: 1.2 });
+      slide.addText(source.title, { x: 0.55, y: 0.75, w: source.kind === "content" ? 5.35 : 12.1, h: source.kind === "content" ? 0.9 : 0.65, fontFace: "Aptos Display", fontSize: source.kind === "content" ? 27 : 30, bold: true, color: source.kind === "cover" ? "FFF8F1" : "302820", breakLine: false, fit: "shrink" });
+      if (source.kind === "content") {
+        slide.addText(source.body, { x: 0.55, y: 1.75, w: 5.35, h: 4.55, fontFace: "Aptos", fontSize: 12, color: "51463E", breakLine: false, fit: "shrink", margin: 0 });
+        slide.addShape(pptx.ShapeType.roundRect, { x: 7.45, y: 0.88, w: 4.75, h: 4.75, rectRadius: 0.14, fill: { color: "F0E5D7" }, line: { color: "D9B9A4", width: 1 } });
+        if (source.image?.startsWith("data:image")) slide.addImage({ data: source.image, x: 7.48, y: 0.91, w: 4.69, h: 4.69, sizing: { type: "cover", x: 7.48, y: 0.91, w: 4.69, h: 4.69 } });
+        slide.addShape(pptx.ShapeType.roundRect, { x: 7.72, y: 4.25, w: 4.22, h: 1.05, rectRadius: 0.08, fill: { color: "FFFFFF", transparency: 10 }, line: { color: "FFFFFF", transparency: 100 } });
+        slide.addText(source.postHeadline ?? source.title, { x: 7.94, y: 4.4, w: 3.8, h: 0.35, fontFace: "Aptos Display", fontSize: 17, bold: true, color: "302820", fit: "shrink", margin: 0 });
+        slide.addText(source.postOffer ?? "", { x: 7.94, y: 4.79, w: 3.8, h: 0.23, fontFace: "Aptos", fontSize: 10, color: "82442F", fit: "shrink", margin: 0 });
+        slide.addText(source.postCta ?? "", { x: 7.94, y: 5.06, w: 3.8, h: 0.18, fontFace: "Aptos", fontSize: 8, bold: true, color: "53654A", fit: "shrink", margin: 0 });
+      } else {
+        slide.addText(source.body, { x: 0.55, y: 1.65, w: 12.05, h: 5.1, fontFace: "Aptos", fontSize: source.kind === "summary" ? 14 : 18, color: source.kind === "cover" ? "F1DED2" : "51463E", breakLine: false, fit: "shrink", margin: 0 });
+      }
+    }
+    await pptx.writeFile({ fileName: `Content-Plan-${client.replaceAll(" ", "-")}-${planMonth}.pptx` });
+    setNotice("ดาวน์โหลดไฟล์ PowerPoint แล้ว — เปิดแก้ต่อใน PowerPoint หรือ Google Slides ได้");
   }
 
   function makeProposal() {
@@ -311,6 +366,7 @@ export default function Home() {
             client,
             format: idea.format,
             scheduledFor: idea.date,
+            contentBrief: slides.find((slide) => slide.ideaId === idea.id)?.body ?? `${idea.category}\n${idea.hook}\n${idea.adminAngle}`,
           })),
         }),
       });
@@ -350,25 +406,26 @@ export default function Home() {
         <label>เดือนที่ต้องการแพลน<input aria-label="เดือนที่ต้องการแพลน" type="month" value={planMonth} onChange={(event) => setPlanMonth(event.target.value)} /></label>
         <label className="span-two">คอนเซ็ปต์หรือเป้าหมายหลักของเดือน<textarea value={theme} onChange={(event) => setTheme(event.target.value)} placeholder="เช่น เดือนนี้ต้องการให้คนเข้าใจว่า Botox ไม่ได้ทำให้หน้าตึง และพาไปสู่การนัด" /></label>
         <label>อยากได้กี่ชิ้นในแผน<input type="number" min="1" max="40" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(40, Number(event.target.value) || 1)))} /></label>
-        <label>นโยบายความซ้ำ<select value={reusePolicy} onChange={(event) => setReusePolicy(event.target.value as "avoid" | "adapt")}><option value="avoid">หลีกเลี่ยงหัวข้อและ Hook เดิม</option><option value="adapt">ต่อยอด Hook ที่พิสูจน์แล้วได้</option></select></label>
+        <label>Promotion / Offer ในแผน (%)<input type="number" min="30" max="75" value={promotionMix} onChange={(event) => setPromotionMix(Math.max(30, Math.min(75, Number(event.target.value) || 50)))} /></label>
+        <label>การนำไอเดียเดิมมาใช้<select value={reusePolicy} onChange={(event) => setReusePolicy(event.target.value as "avoid" | "adapt")}><option value="adapt">Copy-to-Adapt ตามโปร/บริบทเดือนนี้</option><option value="avoid">เปิดมุมใหม่เป็นหลัก</option></select></label>
       </div>
       <div className="product-briefs"><div className="section-label"><div><strong>โปรดักต์ / เรื่องที่อยากสื่อ</strong><span>เพิ่มได้หลายแถว และใช้ “ไม่ระบุโปรดักต์” สำหรับเรื่องแบรนด์ โปร หรือคอนเทนท์ทั่วไป</span></div><button className="text-button" type="button" onClick={addBrief}>+ เพิ่มเรื่อง</button></div>
         {briefs.map((brief, index) => <div className="product-row" key={brief.id}><strong className="row-number">{index + 1}</strong><label>โปรดักต์<input aria-label={`โปรดักต์ ${index + 1}`} list="product-options" value={brief.product} onChange={(event) => updateBrief(brief.id, "product", event.target.value)} placeholder="พิมพ์ชื่อโปรดักต์ได้" /></label><label>อยากให้สื่ออะไร<input value={brief.goal} onChange={(event) => updateBrief(brief.id, "goal", event.target.value)} placeholder="เช่น ชวนคนที่ลังเลให้ทัก" /></label><label>เงื่อนไข / ความต้องการเพิ่ม<input value={brief.customNeed} onChange={(event) => updateBrief(brief.id, "customNeed", event.target.value)} placeholder="เช่น ใช้หมอพูด, มีโปร 2.2" /></label><button className="icon-button" type="button" aria-label={`ลบเรื่องที่ ${index + 1}`} disabled={briefs.length === 1} onClick={() => removeBrief(brief.id)}>×</button></div>)}<datalist id="product-options">{productOptions.map((option) => <option key={option} value={option} />)}</datalist></div>
-      <div className="action-row"><button className="button button-primary" type="button" onClick={generateIdeas} disabled={isGenerating}>{isGenerating ? "AI กำลังคิด…" : "ให้ AI แตกไอเดีย 36 ชิ้น →"}</button><span>ได้หลายทางเลือกในครั้งเดียว ไม่ใช่ไอเดียตายตัว</span></div>
+      <div className="action-row"><button className="button button-primary" type="button" onClick={generateIdeas} disabled={isGenerating}>{isGenerating ? "AI กำลังคิด 36 ทางเลือก…" : "ให้ AI คิด 36 ทางเลือก →"}</button><span>คุณกำหนดจำนวนชิ้นที่จะใช้จริงเอง แล้วเพิ่มจากชุดสำรองได้เสมอ</span></div>
     </section>
 
     {step >= 2 && <section className="flow-card" id="idea-selection">
       <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 2</p><h2>คัดชุดไอเดียสำหรับแผนนี้</h2><p>คัดทีละกลุ่มด้วยตัวกรอง ไม่ต้องไล่ดู 30 ชิ้นพร้อมกันจนตาลาย</p></div><div className="button-cluster"><button className="button button-secondary" onClick={clearSelection} type="button">ล้างตัวเลือก</button><button className="button button-secondary" onClick={selectRecommended} type="button">เลือก {quantity} ชิ้นที่แนะนำ</button></div></div>
-      <div className="selection-summary"><strong>เลือก {selectedIdeas.length} / {ideas.length} ชิ้น</strong><span>คละโปรดักต์ รูปแบบ และมุมเล่าเพื่อให้ทั้ง feed และ ads ไม่จำเจ</span></div>
-      <div className="idea-filters"><label>โปรดักต์<select value={ideaProductFilter} onChange={(event) => setIdeaProductFilter(event.target.value)}><option>ทั้งหมด</option>{ideaProducts.map((item) => <option key={item}>{item}</option>)}</select></label><label>รูปแบบ<select value={ideaFormatFilter} onChange={(event) => setIdeaFormatFilter(event.target.value)}><option>ทั้งหมด</option><option>วิดีโอ</option><option>ภาพ</option><option>อัลบั้ม</option></select></label><label>มุมเล่า<select value={ideaPillarFilter} onChange={(event) => setIdeaPillarFilter(event.target.value)}><option>ทั้งหมด</option>{ideaPillars.map((item) => <option key={item}>{item}</option>)}</select></label><span>แสดง {visibleIdeas.length} จาก {ideas.length} ไอเดีย</span></div>
-      <div className="idea-grid">{visibleIdeas.map((idea) => <button className={`idea-tile ${idea.selected ? "selected" : ""}`} onClick={() => toggleIdea(idea.id)} aria-pressed={idea.selected} type="button" key={idea.id}><span>{idea.selected ? "✓" : "+"} {idea.id} · {idea.format}</span><strong>{idea.title}</strong><p>{idea.hook}</p><em>{idea.product} · {idea.pillar}</em></button>)}</div>
+      <div className="selection-summary"><strong>เลือก {selectedIdeas.length} / {ideas.length} ชิ้น</strong><span>เป้าหมาย Promotion / Offer {promotionMix}% · กดเพิ่มได้จากชุดสำรองโดยไม่จำกัด</span></div>
+      <div className="idea-filters"><label>ประเภทคอนเทนท์<select value={ideaCategoryFilter} onChange={(event) => setIdeaCategoryFilter(event.target.value)}><option>ทั้งหมด</option>{ideaCategories.map((item) => <option key={item}>{item}</option>)}</select></label><label>โปรดักต์<select value={ideaProductFilter} onChange={(event) => setIdeaProductFilter(event.target.value)}><option>ทั้งหมด</option>{ideaProducts.map((item) => <option key={item}>{item}</option>)}</select></label><label>รูปแบบ<select value={ideaFormatFilter} onChange={(event) => setIdeaFormatFilter(event.target.value)}><option>ทั้งหมด</option><option>วิดีโอ</option><option>ภาพ</option><option>อัลบั้ม</option></select></label><label>มุมเล่า<select value={ideaPillarFilter} onChange={(event) => setIdeaPillarFilter(event.target.value)}><option>ทั้งหมด</option>{ideaPillars.map((item) => <option key={item}>{item}</option>)}</select></label><span>แสดง {visibleIdeas.length} จาก {ideas.length} ไอเดีย</span></div>
+      <div className="idea-grid">{visibleIdeas.map((idea) => <button className={`idea-tile ${idea.selected ? "selected" : ""}`} onClick={() => toggleIdea(idea.id)} aria-pressed={idea.selected} type="button" key={idea.id}><span>{idea.selected ? "✓ เลือกแล้ว" : "+ เลือก"} · {idea.format}</span><strong>{idea.title}</strong><p>{idea.hook}</p><em>{idea.category} · {idea.product}</em><small>{idea.adaptation}</small></button>)}</div>
       <div className="sticky-action"><span><strong>{selectedIdeas.length} ไอเดีย</strong> พร้อมรวมเป็นข้อเสนอ</span><button className="button button-primary" onClick={makeProposal} type="button">ทำสไลด์เสนอแผน →</button></div>
     </section>}
 
     {step >= 3 && <section className="flow-card" id="proposal-slides">
-      <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 3 · สไลด์เสนอ</p><h2>สไลด์คอนเซ็ปต์เดือนนี้</h2><p>แก้ข้อความและเพิ่มบริบทในแต่ละหน้าได้ก่อนนำเสนอ ไม่ใช่แค่รายการหัวข้อคอนเทนท์</p></div><button className="button button-secondary" type="button" onClick={() => window.print()}>พิมพ์ / บันทึก PDF</button></div>
-      <div className="slides-editor">{slides.map((slide, index) => <article className={`proposal-slide ${slide.kind}`} key={slide.id}>{slide.image && <img className="slide-image" src={slide.image} alt={`Mockup สำหรับ ${slide.title}`} />}<span>SLIDE {String(index + 1).padStart(2, "0")}</span><textarea aria-label={`หัวข้อสไลด์ ${index + 1}`} className="slide-title" value={slide.title} onChange={(event) => updateSlide(slide.id, "title", event.target.value)} /><textarea aria-label={`เนื้อหาสไลด์ ${index + 1}`} className="slide-body" value={slide.body} onChange={(event) => updateSlide(slide.id, "body", event.target.value)} /><button className="slide-mockup-button" type="button" onClick={() => generateSlideImage(slide)} disabled={slide.imageLoading}>{slide.imageLoading ? "กำลังสร้างภาพ…" : slide.image ? "สร้างภาพใหม่" : "สร้างภาพ mockup"}</button></article>)}</div>
-      <div className="slide-tools"><button className="text-button" type="button" onClick={() => setSlides((current) => [...current, { id: `custom-${Date.now()}`, kind: "custom", title: "หัวข้อสไลด์เพิ่มเติม", body: "พิมพ์ข้อความที่ต้องการนำเสนอ" }])}>+ เพิ่มสไลด์</button><span>แก้ทุกหน้าจากช่องข้อความโดยตรง แล้วใช้ปุ่มพิมพ์เป็น PDF สำหรับส่งลูกค้า</span></div>
+      <div className="flow-title"><div><p className="eyebrow">ขั้นที่ 3 · สไลด์เสนอ</p><h2>สไลด์แนวนอนสำหรับนำเสนอ</h2><p>มีหน้าสรุปทั้งแผน และ 1 หน้า ต่อ 1 คอนเทนท์ พร้อมตัวอย่างชิ้นงาน Facebook ที่แก้ข้อความได้</p></div><div className="button-cluster"><button className="button button-secondary" type="button" onClick={() => window.print()}>พิมพ์ / PDF</button><button className="button button-primary" type="button" onClick={downloadPresentation}>ดาวน์โหลด PowerPoint</button></div></div>
+      <div className="slides-editor">{slides.map((slide, index) => <article className={`proposal-slide ${slide.kind}`} key={slide.id}><div className="slide-copy"><span>SLIDE {String(index + 1).padStart(2, "0")}</span><textarea aria-label={`หัวข้อสไลด์ ${index + 1}`} className="slide-title" value={slide.title} onChange={(event) => updateSlide(slide.id, "title", event.target.value)} /><textarea aria-label={`เนื้อหาสไลด์ ${index + 1}`} className="slide-body" value={slide.body} onChange={(event) => updateSlide(slide.id, "body", event.target.value)} /></div>{slide.kind === "content" && <div className="facebook-preview"><div className="facebook-top"><strong>facebook</strong><span>ตัวอย่างโพสต์</span></div><div className="facebook-art">{slide.image && <img src={slide.image} alt={`ภาพประกอบ ${slide.title}`} />}<div className="facebook-overlay"><textarea aria-label={`Headline โพสต์ ${index + 1}`} value={slide.postHeadline ?? ""} onChange={(event) => updateSlideField(slide.id, "postHeadline", event.target.value)} /><textarea aria-label={`Offer โพสต์ ${index + 1}`} value={slide.postOffer ?? ""} onChange={(event) => updateSlideField(slide.id, "postOffer", event.target.value)} /><textarea aria-label={`CTA โพสต์ ${index + 1}`} value={slide.postCta ?? ""} onChange={(event) => updateSlideField(slide.id, "postCta", event.target.value)} /></div></div><button className="slide-mockup-button" type="button" onClick={() => generateSlideImage(slide)} disabled={slide.imageLoading}>{slide.imageLoading ? "กำลังสร้างภาพชิ้นงาน…" : slide.image ? "สร้างภาพชิ้นงานใหม่" : "สร้างภาพตัวอย่างโพสต์ Facebook"}</button></div>}{slide.kind !== "content" && slide.image && <img className="slide-image" src={slide.image} alt={`Mockup สำหรับ ${slide.title}`} />}</article>)}</div>
+      <div className="slide-tools"><button className="text-button" type="button" onClick={() => setSlides((current) => [...current, { id: `custom-${Date.now()}`, kind: "custom", title: "หัวข้อสไลด์เพิ่มเติม", body: "พิมพ์ข้อความที่ต้องการนำเสนอ" }])}>+ เพิ่มสไลด์</button><span>ตัวอย่าง Facebook เป็นชิ้นงานตั้งต้น: แก้ Headline, Offer, CTA และสร้างภาพประกอบเฉพาะชิ้นได้</span></div>
       <div className="approval-panel"><div><strong>ลูกค้าตรวจแผนนี้แล้วหรือยัง?</strong><span>ถ้ายังไม่ผ่าน กลับไปคัดไอเดียหรือแก้สไลด์ก่อนล็อกวันลง</span></div><div><button className="button button-secondary" onClick={() => { setStep(2); scrollToId("idea-selection"); }} type="button">กลับไปปรับ</button><button className="button button-primary" onClick={approveProposal} type="button">ผ่านทั้งแผน → จัดวันลง</button></div></div>
     </section>}
 
