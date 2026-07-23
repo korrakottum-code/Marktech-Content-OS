@@ -37,8 +37,20 @@ const ideaSeeds = [
   ["Social proof", "คนที่ลังเลแบบเดียวกัน ตัดสินใจจากอะไร"],
 ] as const;
 
+function localDateFromIso(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function isoFromLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function thaiDate(date: string) {
-  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00`));
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(localDateFromIso(date));
 }
 
 function createIdeas(program: string, concern: string): Idea[] {
@@ -59,9 +71,9 @@ function createIdeas(program: string, concern: string): Idea[] {
 
 function nextAvailableDates(amount: number) {
   const dates: string[] = [];
-  const cursor = new Date("2026-07-24T00:00:00");
+  const cursor = new Date(2026, 6, 24);
   while (dates.length < amount) {
-    const iso = cursor.toISOString().slice(0, 10);
+    const iso = isoFromLocalDate(cursor);
     const weekday = cursor.getDay();
     if (weekday !== 0 && weekday !== 6 && !blockedDates.has(iso)) dates.push(iso);
     cursor.setDate(cursor.getDate() + 1);
@@ -191,7 +203,7 @@ export default function Home() {
           {["2026-07-24", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"].map((date) => {
             const assigned = scheduledIdeas.find((idea) => idea.date === date);
             const blocked = blockedDates.get(date);
-            const weekend = [0, 6].includes(new Date(`${date}T00:00:00`).getDay());
+            const weekend = [0, 6].includes(localDateFromIso(date).getDay());
             return <div className={assigned ? "schedule-day assigned" : blocked ? blocked.includes("วันหยุด") ? "schedule-day holiday" : "schedule-day busy" : weekend ? "schedule-day weekend" : "schedule-day"} key={date}><time>{thaiDate(date)}</time><span>{assigned ? assigned.id : blocked ?? (weekend ? "วันหยุดสุดสัปดาห์" : "ว่าง")}</span></div>;
           })}
         </div>
