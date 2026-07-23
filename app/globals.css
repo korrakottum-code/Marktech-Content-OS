@@ -22,6 +22,7 @@ button, select, input { font:inherit; } button { cursor:pointer; }
 
 .connection-panel { background:var(--sage-pale); border:1px solid #d3dec9; border-radius:8px; margin-top:14px; padding:12px; }
 .connection-panel strong { color:#46513e; font-size:11px; }.connection-panel p { color:#55614d; font-size:10px; line-height:1.45; margin:5px 0 10px; }.connection-panel .button { min-height:34px; }
-.status-needs-changes { background:#f7e2dc; color:#9d513b; }.status-parked { background:#eee7df; color:#74685d; }
+.status-needs-changes { background:#f7e2dc; color:#9d513b; }.status-created { background:#dfead7; color:#465d3c; }.status-parked { background:#eee7df; color:#74685d; }
 .decision-actions { align-items:center; display:grid; gap:7px; justify-items:center; width:100%; }.text-action { background:transparent; border:0; color:var(--clay-dark); font-size:10px; font-weight:bold; padding:4px; text-decoration:underline; text-underline-offset:3px; }
+.button:disabled { cursor:wait; opacity:.62; transform:none; }
 .mapping-editor { background:#fff7ed; border:1px solid var(--sand-deep); border-radius:8px; display:grid; gap:10px; margin-top:4px; padding:13px; }.mapping-editor strong { font-size:11px; }.mapping-editor label { color:var(--muted); display:grid; font-size:10px; font-weight:bold; gap:6px; }.mapping-editor input { background:#fffdf9; border:1px solid var(--sand-deep); border-radius:6px; color:var(--ink); min-height:37px; outline-color:var(--clay); padding:0 9px; }.mapping-editor > div { align-items:center; display:flex; gap:10px; }.mapping-editor .button { min-height:35px; }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type IdeaStatus = "Needs review" | "Needs changes" | "Confirmed" | "Queued" | "Parked";
+type IdeaStatus = "Needs review" | "Needs changes" | "Confirmed" | "Queued" | "Created" | "Parked";
 type Pattern = "New angle" | "Copy-to-adapt" | "Retest";
 
 type ContentIdea = {
@@ -89,6 +89,7 @@ function statusLabel(status: IdeaStatus) {
     "Needs changes": "ต้องปรับ",
     Confirmed: "ยืนยันแล้ว",
     Queued: "เข้าคิวแล้ว",
+    Created: "สร้างงานแล้ว",
     Parked: "เก็บไว้ก่อน",
   };
   return labels[status];
@@ -107,6 +108,7 @@ export default function Home() {
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [mappingEditor, setMappingEditor] = useState<"branch" | "package" | null>(null);
   const [mappingValue, setMappingValue] = useState("");
+  const [creatingIdeaId, setCreatingIdeaId] = useState<string | null>(null);
 
   const reviewCount = useMemo(
     () => ideas.filter((idea) => idea.status === "Needs review").length,
@@ -152,6 +154,7 @@ export default function Home() {
       "Needs changes": `${role} ขอปรับไอเดีย “${selected?.title}” แล้ว`,
       Confirmed: `${role} ยืนยันไอเดีย “${selected?.title}” แล้ว`,
       Queued: `“${selected?.title}” อยู่ในคิวส่งเข้า Monday แล้ว`,
+      Created: `สร้างงาน “${selected?.title}” ใน Monday แล้ว`,
       Parked: `เก็บไอเดีย “${selected?.title}” ไว้ก่อนแล้ว — จะไม่ส่งต่อทีมผลิต`,
     };
     setNotice(messages[status]);
@@ -171,6 +174,35 @@ export default function Home() {
     setNotice(`บันทึกกฎ “${mappingValue}” แล้ว — ระบบจะใช้กฎนี้กับงานใหม่จากนี้ไป`);
     setMappingEditor(null);
     setMappingValue("");
+  }
+
+  async function createMondayTask(idea: ContentIdea) {
+    if (!idea.scheduledFor) {
+      setNotice("กรุณาระบุวันที่ลงก่อนสร้างงานใน Monday");
+      return;
+    }
+    setCreatingIdeaId(idea.id);
+    try {
+      const response = await fetch("/api/monday/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentId: idea.id,
+          title: idea.title,
+          client: idea.client,
+          format: idea.format,
+          scheduledFor: idea.scheduledFor,
+        }),
+      });
+      const result = (await response.json()) as { error?: string; nextStep?: string };
+      if (!response.ok) throw new Error(result.error ?? "Monday ไม่ตอบกลับ");
+      updateIdeaStatus(idea.id, "Created");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ไม่สามารถสร้างงานได้";
+      setNotice(`${message} — ตั้งค่า Monday Secret ก่อนลองใหม่`);
+    } finally {
+      setCreatingIdeaId(null);
+    }
   }
 
   return (
@@ -316,7 +348,8 @@ export default function Home() {
                   <button className="button button-primary" onClick={() => updateIdeaStatus(idea.id, "Queued")} type="button">เข้าคิว Monday <span>→</span></button>
                   <button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Needs review")} type="button">ยกเลิกการยืนยัน</button>
                 </div>}
-                {idea.status === "Queued" && <div className="decision-actions"><span className="queue-label">พร้อมส่งเข้า Monday</span><button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Confirmed")} type="button">เอาออกจากคิว</button></div>}
+                {idea.status === "Queued" && <div className="decision-actions"><span className="queue-label">พร้อมสร้างงานใน Monday</span><button className="button button-primary" disabled={creatingIdeaId === idea.id} onClick={() => createMondayTask(idea)} type="button">{creatingIdeaId === idea.id ? "กำลังสร้างงาน..." : "สร้างงานใน Monday"}</button><button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Confirmed")} type="button">เอาออกจากคิว</button></div>}
+                {idea.status === "Created" && <div className="decision-actions"><span className="queue-label">สร้างงานใน Monday แล้ว</span><button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Confirmed")} type="button">ยกเลิกสถานะนี้</button></div>}
                 {idea.status === "Parked" && <div className="decision-actions"><span className="queue-label">ยังไม่ส่งต่อทีมผลิต</span><button className="button button-secondary" onClick={() => updateIdeaStatus(idea.id, "Needs review")} type="button">นำกลับมาตรวจ</button></div>}
               </div>
             </article>)}
