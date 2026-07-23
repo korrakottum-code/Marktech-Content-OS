@@ -30,8 +30,8 @@ function cleanIdeas(value: unknown) {
       format: ["วิดีโอ", "ภาพ", "อัลบั้ม"].includes(idea.format) ? idea.format : "ภาพ",
       pillar: String(idea.pillar ?? "Content idea").slice(0, 80),
       category: ["โปรโมชั่น / Offer", "รีวิว / Proof", "ความรู้ / FAQ", "แบรนด์ / ไลฟ์สไตล์"].includes(idea.category) ? idea.category : "โปรโมชั่น / Offer",
-      visualDirection: String(idea.visualDirection ?? "ภาพโปรโมชันที่มีพื้นที่วางข้อความ").slice(0, 240),
-      adaptation: String(idea.adaptation ?? "สร้างมุมใหม่จากโจทย์เดือนนี้").slice(0, 220),
+      visualDirection: String(idea.visualDirection || "ภาพโปรโมชันที่มีพื้นที่วางข้อความ").slice(0, 240),
+      adaptation: String(idea.adaptation || "สร้างมุมใหม่จากโจทย์เดือนนี้").slice(0, 220),
     }))
     .filter((idea) => idea.title && idea.hook && idea.reason && idea.adminAngle);
 }
