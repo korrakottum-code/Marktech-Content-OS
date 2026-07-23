@@ -195,11 +195,16 @@ export default function Home() {
         }),
       });
       const result = (await response.json()) as { error?: string; nextStep?: string };
-      if (!response.ok) throw new Error(result.error ?? "Monday ไม่ตอบกลับ");
+      if (!response.ok) {
+        if (response.status === 503) {
+          throw new Error("ยังไม่ได้เชื่อม Monday กับเว็บแอปนี้");
+        }
+        throw new Error(result.error ?? "Monday ไม่ตอบกลับ");
+      }
       updateIdeaStatus(idea.id, "Created");
     } catch (error) {
       const message = error instanceof Error ? error.message : "ไม่สามารถสร้างงานได้";
-      setNotice(`${message} — ตั้งค่า Monday Secret ก่อนลองใหม่`);
+      setNotice(`${message} — จึงยังไม่ได้สร้างงานซ้ำใน Monday`);
     } finally {
       setCreatingIdeaId(null);
     }

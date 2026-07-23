@@ -8,6 +8,11 @@ type CreateMondayTaskRequest = {
   scheduledFor?: string;
 };
 
+const formatLabels: Record<string, string> = {
+  "วิดีโอ": "วีดิโอ",
+  "ภาพนิ่ง": "ภาพ",
+};
+
 const createItemMutation = `
   mutation CreateItem($boardId: ID!, $groupId: String, $itemName: String!, $columnValues: JSON!) {
     create_item(
@@ -41,9 +46,12 @@ export async function POST(request: Request) {
     );
   }
 
+  const mondayFormat = formatLabels[body.format] ?? body.format;
   const columnValues: Record<string, unknown> = {
-    dropdown14: body.client,
-    dropdown9: body.format,
+    // Dropdown columns require their visible labels.  This keeps the app's
+    // Thai wording separate from the spelling currently used on the board.
+    dropdown14: { labels: [body.client] },
+    dropdown9: { labels: [mondayFormat] },
   };
   if (body.scheduledFor) columnValues.date6 = { date: body.scheduledFor };
 
