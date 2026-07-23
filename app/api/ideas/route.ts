@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
 เป้าหมาย: สร้างไอเดียคอนเทนท์ที่ช่วยให้คนเข้าใจ เกิดความเชื่อใจ และพาไปสู่การทักแชต/นัด ไม่ใช่คอนเทนท์เพื่อยอด reach อย่างเดียว
 ต้องคิดใหม่จาก brief นี้ ห้ามใช้ไอเดียซ้ำถ้อยคำหรือโครงเดิมมากเกินไป
-สร้าง ${target} ไอเดีย คละ format วิดีโอ ภาพ อัลบั้ม และคละ funnel/pillar เช่น pain point, educate, proof, objection, compare, FAQ, offer bridge, social proof
+สร้าง IDEA_COUNT ไอเดีย คละ format วิดีโอ ภาพ อัลบั้ม และคละ funnel/pillar เช่น pain point, educate, proof, objection, compare, FAQ, offer bridge, social proof
 ถ้ามีหลายโปรดักต์ ต้องกระจายตามน้ำหนักของ brief และยังมีคอนเทนท์ภาพรวมของแบรนด์ได้เมื่อเหมาะสม
 ทุกไอเดียต้องมี title, hook, reason, adminAngle ที่นำไปใช้จริงได้ และอยู่ในภาษาไทย
 
@@ -72,29 +72,32 @@ export async function POST(request: Request) {
     productsAndNeeds: input.briefs.map(({ id: _id, ...item }) => item),
   };
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: process.env.OPENAI_CONTENT_MODEL ?? "gpt-5.6-terra",
-      input: [{ role: "developer", content: [{ type: "input_text", text: instructions }] }, { role: "user", content: [{ type: "input_text", text: JSON.stringify(brief) }] }],
-      reasoning: { effort: "low" },
-      max_output_tokens: 12000,
-      text: { format: { type: "json_object" } },
-    }),
-  });
-  const payload = await response.json() as { output_text?: string; error?: { message?: string }; output?: Array<{ content?: Array<{ text?: string }> }> };
-  if (!response.ok) {
-    return NextResponse.json({ error: "AI generation failed", nextStep: payload.error?.message ?? "OpenAI rejected the generation" }, { status: 502 });
-  }
-
-  const text = payload.output_text ?? payload.output?.flatMap((item) => item.content ?? []).map((item) => item.text ?? "").join("");
   try {
-    const parsed = JSON.parse(text) as { ideas?: unknown };
-    const ideas = cleanIdeas(parsed.ideas);
+    const batchSize = 10;
+    const batches = Array.from({ length: Math.ceil(target / batchSize) }, (_, index) => Math.min(batchSize, target - index * batchSize));
+    const results = await Promise.all(batches.map(async (count, batchIndex) => {
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(45_000),
+        body: JSON.stringify({
+          model: process.env.OPENAI_CONTENT_MODEL ?? "gpt-5.6-terra",
+          input: [{ role: "developer", content: [{ type: "input_text", text: instructions.replace("IDEA_COUNT", String(count)) + `\nชุดที่ ${batchIndex + 1}: เลือกมุมและ Hook ที่ไม่ซ้ำกับชุดอื่น` }] }, { role: "user", content: [{ type: "input_text", text: JSON.stringify(brief) }] }],
+          reasoning: { effort: "low" },
+          max_output_tokens: 4200,
+          text: { format: { type: "json_object" } },
+        }),
+      });
+      const payload = await response.json() as { output_text?: string; error?: { message?: string }; output?: Array<{ content?: Array<{ text?: string }> }> };
+      if (!response.ok) throw new Error(payload.error?.message ?? "OpenAI rejected the generation");
+      const text = payload.output_text ?? payload.output?.flatMap((item) => item.content ?? []).map((item) => item.text ?? "").join("");
+      const parsed = JSON.parse(text) as { ideas?: unknown };
+      return cleanIdeas(parsed.ideas);
+    }));
+    const ideas = results.flat().map((idea, index) => ({ ...idea, id: `IDEA-${String(index + 1).padStart(2, "0")}` }));
     if (ideas.length < 24) throw new Error("AI returned too few usable ideas");
-    return NextResponse.json({ ideas });
-  } catch {
-    return NextResponse.json({ error: "AI returned an unreadable idea set", nextStep: "ลองกดสร้างอีกครั้ง หรือปรับโจทย์ให้เฉพาะเจาะจงขึ้น" }, { status: 502 });
+    return NextResponse.json({ ideas: ideas.slice(0, target) });
+  } catch (error) {
+    return NextResponse.json({ error: "AI generation failed", nextStep: error instanceof Error ? error.message : "ลองกดสร้างอีกครั้ง หรือปรับโจทย์ให้เฉพาะเจาะจงขึ้น" }, { status: 502 });
   }
 }
