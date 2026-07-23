@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PptxGenJS from "pptxgenjs";
+import { balancedDates } from "@/lib/planning.js";
 
 type Format = "วิดีโอ" | "ภาพ" | "อัลบั้ม";
 type ProductBrief = { id: string; product: string; goal: string; customNeed: string; price: string; priceUnit: string };
@@ -121,33 +122,6 @@ function buildSlides(client: string, month: string, theme: string, ideas: Idea[]
       postCta: "ทักแชตเพื่อรับรายละเอียด",
     })),
   ];
-}
-
-function balancedDates(ideas: Idea[], month: string) {
-  const allDates = daysInMonth(month);
-  const existing = existingWork.filter((work) => work.date.startsWith(month));
-  const assignments = new Map<string, { total: number; formats: Record<Format, number> }>();
-  for (const date of allDates) assignments.set(date, { total: 0, formats: { วิดีโอ: 0, ภาพ: 0, อัลบั้ม: 0 } });
-  for (const work of existing) {
-    const slot = assignments.get(work.date);
-    if (slot) { slot.total += 1; slot.formats[work.format] += 1; }
-  }
-
-  const result = new Map<string, string>();
-  ideas.forEach((idea, index) => {
-    const idealIndex = Math.round(((index + 0.5) * allDates.length) / ideas.length) - 1;
-    const candidates = allDates
-      .map((date, dateIndex) => ({ date, dateIndex, slot: assignments.get(date)! }))
-      .sort((a, b) => {
-        const scoreA = a.slot.total * 12 + a.slot.formats[idea.format] * 7 + Math.abs(a.dateIndex - idealIndex) * 0.75;
-        const scoreB = b.slot.total * 12 + b.slot.formats[idea.format] * 7 + Math.abs(b.dateIndex - idealIndex) * 0.75;
-        return scoreA - scoreB || a.dateIndex - b.dateIndex;
-      })[0];
-    result.set(idea.id, candidates.date);
-    candidates.slot.total += 1;
-    candidates.slot.formats[idea.format] += 1;
-  });
-  return result;
 }
 
 export default function Home() {
@@ -521,14 +495,20 @@ export default function Home() {
   }
 
   async function approveProposal() {
-    fetch("/api/content/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client, planMonth, serviceScope, items: selectedIdeas }) }).catch(() => undefined);
-    setStep(4);
-    setNotice("ผ่านทั้งแผนแล้ว — ขั้นต่อไปคือกระจายวันลงตลอดทั้งเดือน โดยดูจำนวนงานและประเภทงานในแต่ละวัน");
-    scrollToId("month-calendar");
+    try {
+      const response = await fetch("/api/content/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client, planMonth, serviceScope, items: selectedIdeas }) });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "บันทึกประวัติแผนไม่สำเร็จ");
+      setStep(4);
+      setNotice("บันทึกการอนุมัติแล้ว — ขั้นต่อไปคือกระจายวันลงตลอดทั้งเดือน โดยดูจำนวนงานและประเภทงานในแต่ละวัน");
+      scrollToId("month-calendar");
+    } catch (error) {
+      setNotice(`ยังไม่อนุมัติแผน: ${error instanceof Error ? error.message : "บันทึกประวัติแผนไม่สำเร็จ"}`);
+    }
   }
 
   function schedulePlan() {
-    const dates = balancedDates(selectedIdeas, planMonth);
+    const dates = balancedDates(selectedIdeas, planMonth, existingWork);
     setIdeas((current) => current.map((idea) => idea.selected ? { ...idea, date: dates.get(idea.id) } : idea));
     setStep(5);
     setNotice(`จัดวันลง ${selectedIdeas.length} ชิ้นครบทั้งเดือนแล้ว — ระบบกระจายตามจำนวนงานและประเภทงาน ไม่ได้ตัดวันหยุดออก`);

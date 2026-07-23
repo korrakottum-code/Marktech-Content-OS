@@ -1,100 +1,10 @@
 import { NextResponse } from "next/server";
 import { env } from "cloudflare:workers";
+import { cleanIdeas, dedupeIdeas, enforceOfferPricing, ensurePriceMentions } from "@/lib/planning.js";
 
 type ProductBrief = { id?: string; product?: string; goal?: string; customNeed?: string; price?: string; priceUnit?: string };
 type ExistingIdea = { title?: string; hook?: string; product?: string; pillar?: string; category?: string };
 type ContentCategory = "โปรโมชั่น / Offer" | "รีวิว / Proof" | "ความรู้ / FAQ" | "แบรนด์ / ไลฟ์สไตล์";
-type GeneratedIdea = {
-  id?: string;
-  product: string;
-  title: string;
-  hook: string;
-  reason: string;
-  adminAngle: string;
-  format: "วิดีโอ" | "ภาพ" | "อัลบั้ม";
-  pillar: string;
-  category: "โปรโมชั่น / Offer" | "รีวิว / Proof" | "ความรู้ / FAQ" | "แบรนด์ / ไลฟ์สไตล์";
-  priceLabel?: string;
-  visualDirection: string;
-  adaptation: string;
-};
-
-function cleanIdeas(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((idea): idea is GeneratedIdea => Boolean(idea) && typeof idea === "object")
-    .map((idea, index) => ({
-      id: `IDEA-${String(index + 1).padStart(2, "0")}`,
-      product: String(idea.product ?? "ไม่ระบุโปรดักต์").slice(0, 80),
-      title: String(idea.title ?? "").slice(0, 72),
-      hook: String(idea.hook ?? "").slice(0, 42),
-      reason: String(idea.reason ?? "").slice(0, 500),
-      adminAngle: String(idea.adminAngle ?? "").slice(0, 240),
-      format: ["วิดีโอ", "ภาพ", "อัลบั้ม"].includes(idea.format) ? idea.format : "ภาพ",
-      pillar: String(idea.pillar ?? "Content idea").slice(0, 80),
-      category: ["โปรโมชั่น / Offer", "รีวิว / Proof", "ความรู้ / FAQ", "แบรนด์ / ไลฟ์สไตล์"].includes(idea.category) ? idea.category : "โปรโมชั่น / Offer",
-      priceLabel: String(idea.priceLabel ?? "").slice(0, 80),
-      visualDirection: String(idea.visualDirection || "ภาพโปรโมชันที่มีพื้นที่วางข้อความ").slice(0, 240),
-      adaptation: String(idea.adaptation || "สร้างมุมใหม่จากโจทย์เดือนนี้").slice(0, 220),
-    }))
-    .filter((idea) => idea.title && idea.hook && idea.reason);
-}
-
-function dedupeIdeas(ideas: ReturnType<typeof cleanIdeas>) {
-  const exactTitles = new Set<string>();
-  return ideas.filter((idea) => {
-    const titleKey = `${idea.product}|${idea.title}`.replace(/\s+/g, "").toLowerCase();
-    if (exactTitles.has(titleKey)) return false;
-    exactTitles.add(titleKey);
-    return true;
-  });
-}
-
-function ensurePriceMentions(ideas: ReturnType<typeof cleanIdeas>, briefs: ProductBrief[], minimumPerPricedProduct: number) {
-  const result = [...ideas];
-  for (const brief of briefs) {
-    const product = brief.product?.trim();
-    const price = brief.price?.trim();
-    const unit = brief.priceUnit?.trim();
-    if (!product || !price || !unit) continue;
-    const priceLabel = `${price} ${unit}`;
-    const candidates = result
-      .map((idea, index) => ({ idea, index }))
-      .filter(({ idea }) => idea.product.trim().toLowerCase() === product.toLowerCase());
-    let mentions = candidates.filter(({ idea }) => `${idea.title} ${idea.hook} ${idea.priceLabel ?? ""}`.includes(price)).length;
-    for (const { idea, index } of candidates) {
-      if (mentions >= minimumPerPricedProduct) break;
-      if (`${idea.title} ${idea.hook} ${idea.priceLabel ?? ""}`.includes(price)) continue;
-      result[index] = { ...idea, priceLabel };
-      mentions += 1;
-    }
-  }
-  return result;
-}
-
-function enforceOfferPricing(ideas: ReturnType<typeof cleanIdeas>, briefs: ProductBrief[]) {
-  const priceLayouts = [
-    "ป้ายราคาใหญ่ด้านบนขวา",
-    "ราคาเป็น hero กลางภาพ",
-    "แถบราคาเต็มความกว้างด้านล่าง",
-    "price card เปรียบเทียบด้านข้าง",
-    "sticker ราคาเด่นคู่กับ CTA",
-  ];
-  return ideas.map((idea, index) => {
-    if (idea.category !== "โปรโมชั่น / Offer") return idea;
-    const brief = briefs.find((item) => item.product?.trim().toLowerCase() === idea.product.trim().toLowerCase());
-    const price = brief?.price?.trim();
-    const unit = brief?.priceUnit?.trim();
-    if (!price || !unit) return { ...idea, category: "ความรู้ / FAQ" as const };
-    const priceLabel = `${price} ${unit}`;
-    return {
-      ...idea,
-      priceLabel,
-      visualDirection: `งาน Offer ต้องวาง ${priceLabel} แบบ ${priceLayouts[index % priceLayouts.length]} | ${idea.visualDirection}`.slice(0, 240),
-    };
-  });
-}
-
 export async function POST(request: Request) {
   const input = await request.json().catch(() => null) as {
     client?: string;
