@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type IdeaStatus = "Needs review" | "Confirmed" | "Queued";
+type IdeaStatus = "Needs review" | "Needs changes" | "Confirmed" | "Queued" | "Parked";
 type Pattern = "New angle" | "Copy-to-adapt" | "Retest";
 
 type ContentIdea = {
@@ -83,6 +83,17 @@ function patternLabel(pattern: Pattern) {
       : "ทดสอบซ้ำ";
 }
 
+function statusLabel(status: IdeaStatus) {
+  const labels: Record<IdeaStatus, string> = {
+    "Needs review": "รอตัดสินใจ",
+    "Needs changes": "ต้องปรับ",
+    Confirmed: "ยืนยันแล้ว",
+    Queued: "เข้าคิวแล้ว",
+    Parked: "เก็บไว้ก่อน",
+  };
+  return labels[status];
+}
+
 export default function Home() {
   const [activeNav, setActiveNav] = useState("วันนี้");
   const [ideas, setIdeas] = useState(initialIdeas);
@@ -93,6 +104,9 @@ export default function Home() {
   const [pattern, setPattern] = useState<Pattern>("Copy-to-adapt");
   const [role, setRole] = useState<"Planner" | "PM">("Planner");
   const [notice, setNotice] = useState("วันนี้มี 2 ไอเดียที่ต้องตัดสินใจก่อนทีมเริ่มผลิต");
+  const [connectionOpen, setConnectionOpen] = useState(false);
+  const [mappingEditor, setMappingEditor] = useState<"branch" | "package" | null>(null);
+  const [mappingValue, setMappingValue] = useState("");
 
   const reviewCount = useMemo(
     () => ideas.filter((idea) => idea.status === "Needs review").length,
@@ -124,16 +138,39 @@ export default function Home() {
     setNotice(`สร้างร่างไอเดียสำหรับ ${client} แล้ว — อยู่ในรายการ “รอตัดสินใจ” ด้านล่าง`);
   }
 
-  function confirmIdea(id: string) {
+  function updateIdeaStatus(id: string, status: IdeaStatus) {
     const selected = ideas.find((idea) => idea.id === id);
-    if (!selected?.scheduledFor) {
+    if (status === "Queued" && !selected?.scheduledFor) {
       setNotice("กรุณาระบุวันที่ลงก่อนส่งต่อเข้า Monday");
       return;
     }
     setIdeas((current) =>
-      current.map((idea) => (idea.id === id ? { ...idea, status: "Queued" } : idea)),
+      current.map((idea) => (idea.id === id ? { ...idea, status } : idea)),
     );
-    setNotice(`${role} ยืนยันแล้ว — ${selected.title} อยู่ในคิวส่งเข้า Monday`);
+    const messages: Record<IdeaStatus, string> = {
+      "Needs review": `${selected?.title} กลับมาอยู่ในรายการรอตัดสินใจแล้ว`,
+      "Needs changes": `${role} ขอปรับไอเดีย “${selected?.title}” แล้ว`,
+      Confirmed: `${role} ยืนยันไอเดีย “${selected?.title}” แล้ว`,
+      Queued: `“${selected?.title}” อยู่ในคิวส่งเข้า Monday แล้ว`,
+      Parked: `เก็บไอเดีย “${selected?.title}” ไว้ก่อนแล้ว — จะไม่ส่งต่อทีมผลิต`,
+    };
+    setNotice(messages[status]);
+  }
+
+  function goTo(section: "top" | "composer" | "review" | "connection", nav: string) {
+    setActiveNav(nav);
+    document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (section === "connection") setConnectionOpen(true);
+  }
+
+  function saveMapping() {
+    if (!mappingValue.trim()) {
+      setNotice("กรุณาเลือกหรือพิมพ์กฎก่อนบันทึก");
+      return;
+    }
+    setNotice(`บันทึกกฎ “${mappingValue}” แล้ว — ระบบจะใช้กฎนี้กับงานใหม่จากนี้ไป`);
+    setMappingEditor(null);
+    setMappingValue("");
   }
 
   return (
@@ -148,7 +185,18 @@ export default function Home() {
             <button
               className={activeNav === item ? "nav-button is-active" : "nav-button"}
               key={item}
-              onClick={() => setActiveNav(item)}
+              onClick={() =>
+                goTo(
+                  item === "วันนี้"
+                    ? "top"
+                    : item === "สร้างไอเดีย"
+                      ? "composer"
+                      : item === "คลังที่เคยทำ"
+                        ? "review"
+                        : "connection",
+                  item,
+                )
+              }
               type="button"
             >
               {item}
@@ -171,7 +219,7 @@ export default function Home() {
             <p className="lead">เริ่มจากงานที่ต้องตัดสินใจวันนี้ แล้วระบบจะจำสิ่งที่เวิร์กไว้ให้เดือนถัดไป</p>
           </div>
           <div className="welcome-actions">
-            <button className="button button-secondary" onClick={() => setNotice("เลื่อนลงเพื่อดูไอเดียที่รอตัดสินใจ") } type="button">ดูรายการรอตัดสินใจ <span>↓</span></button>
+            <button className="button button-secondary" onClick={() => goTo("review", "คลังที่เคยทำ")} type="button">ดูรายการรอตัดสินใจ <span>↓</span></button>
             <button className="button button-primary" onClick={generateDraft} type="button">+ สร้างร่างไอเดีย</button>
           </div>
         </section>
@@ -183,7 +231,7 @@ export default function Home() {
             <span className="card-label">ต้องทำก่อน</span>
             <strong>{reviewCount} ไอเดียรอการตัดสินใจ</strong>
             <p>ยืนยันแล้วจึงจะเข้าคิวสร้างงานใน Monday</p>
-            <button className="inline-action" onClick={() => setNotice("เลื่อนลงเพื่อดูไอเดียที่รอตัดสินใจ") } type="button">ตรวจไอเดีย <span>→</span></button>
+            <button className="inline-action" onClick={() => goTo("review", "คลังที่เคยทำ")} type="button">ตรวจไอเดีย <span>→</span></button>
           </article>
           <article className="priority-card">
             <span className="card-label">พร้อมส่ง Monday</span>
@@ -198,7 +246,7 @@ export default function Home() {
         </section>
 
         <section className="work-grid">
-          <section className="card composer-card">
+          <section className="card composer-card" id="composer">
             <div className="section-heading">
               <div><p className="kicker">1. ตั้งโจทย์</p><h2>สร้างไอเดียที่นำไปใช้ได้</h2></div>
               <span className="soft-tag">AI ช่วยร่าง · คนเป็นคนเลือก</span>
@@ -230,8 +278,8 @@ export default function Home() {
             <button className="button button-primary full-width" onClick={generateDraft} type="button">สร้างร่างไอเดียเพื่อให้ตรวจ <span>→</span></button>
           </section>
 
-          <aside className="card production-card">
-            <div className="section-heading"><div><p className="kicker">งานผลิตจาก Monday</p><h2>สิ่งที่ทีมกำลังรอ</h2></div><button className="link-button" onClick={() => setNotice("การดึงงานจาก Monday พร้อมเปิดใช้เมื่อเพิ่ม Secret") } type="button">การเชื่อมต่อ</button></div>
+          <aside className="card production-card" id="connection">
+            <div className="section-heading"><div><p className="kicker">งานผลิตจาก Monday</p><h2>สิ่งที่ทีมกำลังรอ</h2></div><button className="link-button" onClick={() => setConnectionOpen((open) => !open)} type="button">{connectionOpen ? "ซ่อนการเชื่อมต่อ" : "ตั้งค่าการเชื่อมต่อ"}</button></div>
             <div className="monday-list">
               {mondayItems.map((item) => <article className="monday-item" key={item.name}>
                 <span className="client-badge">{item.client.slice(0, 2)}</span>
@@ -239,6 +287,7 @@ export default function Home() {
               </article>)}
             </div>
             <div className="production-note"><strong>หลักการทำงาน</strong><p>Monday เป็นที่ทำงานของทีมผลิต ส่วนที่นี่เป็นที่เก็บความจำของคอนเทนท์และผลลัพธ์</p></div>
+            {connectionOpen && <div className="connection-panel"><strong>การเชื่อมต่อยังไม่พร้อมใช้งาน</strong><p>เมื่อเพิ่ม Monday Secret แล้ว ระบบจะดึงงานและสร้างงานหลังจากกดยืนยันได้</p><button className="button button-secondary" onClick={() => setNotice("บันทึกไว้แล้ว: ต้องตั้ง Monday Secret ก่อนเปิดใช้งานจริง") } type="button">รับทราบ</button></div>}
           </aside>
         </section>
 
@@ -247,15 +296,28 @@ export default function Home() {
           <div className="idea-list">
             {ideas.map((idea) => <article className="idea-card" key={idea.id}>
               <div className="idea-card-main">
-                <div className="idea-meta"><span className={`status status-${idea.status.toLowerCase().replace(" ", "-")}`}>{idea.status === "Needs review" ? "รอตัดสินใจ" : idea.status === "Confirmed" ? "ยืนยันแล้ว" : "เข้าคิวแล้ว"}</span><span>{idea.id}</span><span>ลง {formatThaiDate(idea.scheduledFor)}</span></div>
+                <div className="idea-meta"><span className={`status status-${idea.status.toLowerCase().replace(" ", "-")}`}>{statusLabel(idea.status)}</span><span>{idea.id}</span><span>ลง {formatThaiDate(idea.scheduledFor)}</span></div>
                 <h3>{idea.title}</h3>
                 <div className="tag-row"><span>{idea.client}</span><span>{idea.program}</span><span>{idea.concern}</span><span>{idea.format}</span><span>{patternLabel(idea.pattern)}</span></div>
                 <p className="hook">“{idea.hook}”</p><p className="rationale">{idea.rationale}</p>
               </div>
               <div className="idea-card-action">
-                {idea.status === "Queued" ? <><span className="queue-label">พร้อมส่งเข้า Monday</span><small>วันที่ลง: {formatThaiDate(idea.scheduledFor)}</small></> : <>
-                  <small>ตรวจโดย {role}</small><button className="button button-primary" onClick={() => confirmIdea(idea.id)} type="button">{idea.status === "Confirmed" ? "เข้าคิว Monday" : "ยืนยันไอเดีย"} <span>→</span></button>
-                </>}
+                <small>ตัดสินใจโดย {role}</small>
+                {idea.status === "Needs review" && <div className="decision-actions">
+                  <button className="button button-primary" onClick={() => updateIdeaStatus(idea.id, "Confirmed")} type="button">ยืนยันไอเดีย</button>
+                  <button className="button button-secondary" onClick={() => updateIdeaStatus(idea.id, "Needs changes")} type="button">ขอปรับ</button>
+                  <button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Parked")} type="button">เก็บไว้ก่อน</button>
+                </div>}
+                {idea.status === "Needs changes" && <div className="decision-actions">
+                  <button className="button button-primary" onClick={() => updateIdeaStatus(idea.id, "Needs review")} type="button">ส่งกลับมาตรวจ</button>
+                  <button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Parked")} type="button">เก็บไว้ก่อน</button>
+                </div>}
+                {idea.status === "Confirmed" && <div className="decision-actions">
+                  <button className="button button-primary" onClick={() => updateIdeaStatus(idea.id, "Queued")} type="button">เข้าคิว Monday <span>→</span></button>
+                  <button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Needs review")} type="button">ยกเลิกการยืนยัน</button>
+                </div>}
+                {idea.status === "Queued" && <div className="decision-actions"><span className="queue-label">พร้อมส่งเข้า Monday</span><button className="text-action" onClick={() => updateIdeaStatus(idea.id, "Confirmed")} type="button">เอาออกจากคิว</button></div>}
+                {idea.status === "Parked" && <div className="decision-actions"><span className="queue-label">ยังไม่ส่งต่อทีมผลิต</span><button className="button button-secondary" onClick={() => updateIdeaStatus(idea.id, "Needs review")} type="button">นำกลับมาตรวจ</button></div>}
               </div>
             </article>)}
           </div>
@@ -263,8 +325,13 @@ export default function Home() {
 
         <section className="bottom-grid">
           <section className="card mapping-card"><div className="section-heading"><div><p className="kicker">ต้องกำหนดกฎ</p><h2>ระบบพบข้อมูลที่ไม่แน่ใจ</h2></div><span className="count-badge warn">2 รายการ</span></div>
-            <div className="mapping-row"><div><strong>NV โปรสาขาสกล</strong><p>ยังไม่มี Client และรูปแบบในข้อมูลที่ import</p></div><button className="button button-secondary" onClick={() => setNotice("เปิดหน้าตั้งกฎสำหรับ NV โปรสาขาสกล") } type="button">จัดกลุ่ม</button></div>
-            <div className="mapping-row"><div><strong>all / 6,666</strong><p>ควรบันทึกเป็น Package / Offer ไม่ใช่ Program</p></div><button className="button button-secondary" onClick={() => setNotice("เปิดหน้าสร้าง Package / Offer mapping") } type="button">เพิ่มกฎ</button></div>
+            <div className="mapping-row"><div><strong>NV โปรสาขาสกล</strong><p>ยังไม่มี Client และรูปแบบในข้อมูลที่ import</p></div><button className="button button-secondary" onClick={() => { setMappingEditor("branch"); setMappingValue("NV · สาขาสกล · ภาพ"); }} type="button">จัดกลุ่ม</button></div>
+            <div className="mapping-row"><div><strong>all / 6,666</strong><p>ควรบันทึกเป็น Package / Offer ไม่ใช่ Program</p></div><button className="button button-secondary" onClick={() => { setMappingEditor("package"); setMappingValue("Package / Offer"); }} type="button">เพิ่มกฎ</button></div>
+            {mappingEditor && <div className="mapping-editor">
+              <strong>{mappingEditor === "branch" ? "จัดกลุ่ม NV โปรสาขาสกล" : "กำหนดประเภท all / 6,666"}</strong>
+              <label>กฎที่จะใช้กับข้อมูลนี้<input value={mappingValue} onChange={(event) => setMappingValue(event.target.value)} /></label>
+              <div><button className="button button-primary" onClick={saveMapping} type="button">บันทึกกฎ</button><button className="text-action" onClick={() => setMappingEditor(null)} type="button">ยกเลิก</button></div>
+            </div>}
           </section>
           <aside className="card taxonomy-card"><p className="kicker">กฎที่ใช้อยู่</p><h2>Taxonomy ของ Marktech</h2><dl><div><dt>Service Group</dt><dd>Injectable → Botox, Filler</dd></div><div><dt>Concern เริ่มต้น</dt><dd>ริ้วรอย → Botox</dd></div><div><dt>Package</dt><dd>all → รอตั้งกฎให้ชัด</dd></div></dl></aside>
         </section>
