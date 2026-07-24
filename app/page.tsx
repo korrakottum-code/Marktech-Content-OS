@@ -463,9 +463,15 @@ export default function Home() {
           customNeed: String(brief.customNeed ?? ""), price: String(brief.price ?? ""), priceUnit: String(brief.priceUnit ?? ""),
         })));
       }
+      // Parsing a new one-command brief must never leave results from a
+      // previous generation on screen. Those old cards made it look as if
+      // this action had generated ideas automatically.
+      setIdeas([]);
+      setSlides([]);
+      setStep(1);
       setBriefSummary(String(parsed.summary ?? "AI แยกโปรดักต์ เป้าหมาย และจุดที่ต้องขยี้ให้แล้ว"));
       setAdvancedBriefOpen(false);
-      setNotice("AI แยกโจทย์ให้แล้ว — กดสร้างไอเดียได้เลย หรือเปิดรายละเอียดเพื่อปรับเฉพาะจุด");
+      setNotice("AI แยกโจทย์ให้แล้ว — ยังไม่มีไอเดียถูกสร้าง กด “ยืนยัน · สร้างไอเดีย” เมื่อพร้อม");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "ยังเชื่อม AI ไม่สำเร็จ");
     } finally {
