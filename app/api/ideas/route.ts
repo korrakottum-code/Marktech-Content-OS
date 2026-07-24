@@ -61,10 +61,10 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "AI is not configured", nextStep: "เพิ่ม OPENAI_API_KEY เป็น secret ฝั่งเซิร์ฟเวอร์ก่อน" }, { status: 503 });
 
   const allowedCategories = (input.categories ?? []).filter((category): category is ContentCategory => ["โปรโมชั่น / Offer", "รีวิว / Proof", "ความรู้ / FAQ", "แบรนด์ / ไลฟ์สไตล์"].includes(category));
-  const requestedCount = Math.max(1, Math.min(20, Math.round(input.quantity ?? 8)));
-  // The first pass is always a complete option pool. Selecting fewer items is
-  // the planner's decision; constraining generation too early causes sameness.
-  const target = input.mode === "additional" ? requestedCount : 36;
+  const requestedCount = Math.max(1, Math.min(36, Math.round(input.quantity ?? 8)));
+  // The planner owns the size of the option pool. Diversity rules apply to
+  // one idea as well as thirty-six; a small brief must never become a wall.
+  const target = requestedCount;
   const hasVerifiedOffer = input.briefs.some((brief) => brief.price?.trim() && brief.priceUnit?.trim());
   const planningGoal: PlanningGoal = ["sales", "trust", "balanced", "trend"].includes(input.planningGoal ?? "") ? input.planningGoal as PlanningGoal : "sales";
   const slots = buildMechanismSlots(target, planningGoal, allowedCategories, hasVerifiedOffer) as Slot[];

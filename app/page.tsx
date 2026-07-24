@@ -40,8 +40,8 @@ type DraftPayload = {
 };
 type EditableIdeaField = "product" | "title" | "hook" | "priceLabel" | "reason" | "pillar" | "visualDirection" | "adaptation";
 
-function suggestionCount(_quantity: number) {
-  return 36;
+function suggestionCount(quantity: number) {
+  return Math.min(36, Math.max(1, quantity));
 }
 
 const contentClients = ["NV", "Root Privé", "Fill-D", "Be Bright", "A&B Clinic", "Sherlyn", "Facial Studio", "Luxe Aesthetics"];
@@ -809,7 +809,7 @@ export default function Home() {
         <label className="span-two">คอนเซ็ปต์หรือเป้าหมายหลักของเดือน<textarea value={theme} onChange={(event) => setTheme(event.target.value)} placeholder="เช่น เดือนนี้ต้องการให้คนเข้าใจว่า Botox ไม่ได้ทำให้หน้าตึง และพาไปสู่การนัด" /></label>
         <label>น้ำหนักแผน<select value={planningGoal} onChange={(event) => setPlanningGoal(event.target.value as PlanningGoal)}><option value="sales">เน้นปิดการขาย</option><option value="trust">เน้นความน่าเชื่อถือ</option><option value="balanced">คละอย่างสมดุล</option><option value="trend">เน้นบริบท/กระแส</option></select></label>
         <label className="span-two">บริบทสดที่อยากให้หยิบใช้ <small>(โปรจริง, เทศกาล, ข่าว, เทรนด์, format ที่กำลังมา)</small><textarea value={freshContext} onChange={(event) => setFreshContext(event.target.value)} placeholder="เช่น โปรสิ้นเดือน: Botox 50 ยูนิต ราคา… / เปิดสาขาใหม่ / ช่วงเปิดเทอม / คลิป POV แบบ…  ถ้าไม่มีให้เว้นว่าง ระบบจะไม่แต่งเทรนด์ขึ้นเอง" /></label>
-        <label>อยากได้กี่ชิ้นในแผน<input type="number" min="1" max="40" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(40, Number(event.target.value) || 1)))} /></label>
+        <label>ให้ AI คิดกี่ทางเลือก <small>(1–36 ชิ้น)</small><input type="number" min="1" max="36" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(36, Number(event.target.value) || 1)))} /></label>
         <label>การนำไอเดียเดิมมาใช้<select value={reusePolicy} onChange={(event) => setReusePolicy(event.target.value as "avoid" | "adapt")}><option value="adapt">Copy-to-Adapt ตามโปร/บริบทเดือนนี้</option><option value="avoid">เปิดมุมใหม่เป็นหลัก</option></select></label>
       </div>
       <fieldset className="category-picker"><legend>ประเภทคอนเทนท์ที่อยากได้ <small>ไม่เลือก = ระบบกระจาย 8 กลไกให้อัตโนมัติ</small></legend><div>{categoryChoices.map((category) => <label key={category}><input type="checkbox" checked={requestedCategories.includes(category)} onChange={() => setRequestedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category])} />{category}</label>)}</div><p className="mechanism-note">ระบบจะวางโครงก่อนเขียน: Offer · Proof · Expert · Scenario · Interactive · Conversion · Trend · Behind the scenes แล้วตรวจคำเปิดและมุมซ้ำก่อนแสดงผล</p></fieldset>
