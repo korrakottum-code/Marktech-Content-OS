@@ -26,12 +26,13 @@ type Slide = { id: string; kind: "cover" | "summary" | "strategy" | "content" | 
 type ExistingWork = { date: string; format: Format; title: string };
 type BoardGroup = { label: string; id: string };
 type BoardOption = { id: string; name: string; groups: BoardGroup[] };
-type SavedPlan = { id: string; title: string; client: string; planMonth: string; status: string; updatedAt: string };
+type PlanStatus = "draft" | "approved" | "sent_to_monday" | "completed";
+type SavedPlan = { id: string; title: string; client: string; planMonth: string; status: PlanStatus; updatedAt: string };
 type DraftPayload = {
   planName: string; client: string; serviceScope: "content" | "ads_only"; industry: string; reusePolicy: "avoid" | "adapt";
   requestedCategories: Idea["category"][]; planMonth: string; theme: string; brandMood: string; brandReferenceImage: string | null;
   brandReferenceName: string; brandReferenceStatus: string; quantity: number; briefs: ProductBrief[]; ideas: Idea[]; slides: Slide[];
-  step: number; groupId: string; boardId: string; boards: BoardOption[];
+  step: number; groupId: string; boardId: string; boards: BoardOption[]; planStatus: PlanStatus;
 };
 type EditableIdeaField = "product" | "title" | "hook" | "priceLabel" | "reason" | "pillar" | "visualDirection" | "adaptation";
 
@@ -171,12 +172,15 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [notice, setNotice] = useState("ตั้งเดือน เป้าหมาย และหัวข้อที่อยากสื่อ แล้วให้ AI แตกหลายทางเลือกในครั้งเดียว");
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [planStatus, setPlanStatus] = useState<PlanStatus>("draft");
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState("");
   const [draftReady, setDraftReady] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
   const [showNewPlanConfirm, setShowNewPlanConfirm] = useState(false);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const lastSavedSnapshot = useRef("");
   const saveSequence = useRef(0);
   const adsOnly = serviceScope === "ads_only";
@@ -196,10 +200,12 @@ export default function Home() {
   const draftPayload = useMemo<DraftPayload>(() => ({
     planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, brandMood,
     brandReferenceImage, brandReferenceName, brandReferenceStatus, quantity, briefs, ideas, slides, step,
-    groupId, boardId, boards,
-  }), [planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, brandMood, brandReferenceImage, brandReferenceName, brandReferenceStatus, quantity, briefs, ideas, slides, step, groupId, boardId, boards]);
+    groupId, boardId, boards, planStatus,
+  }), [planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, brandMood, brandReferenceImage, brandReferenceName, brandReferenceStatus, quantity, briefs, ideas, slides, step, groupId, boardId, boards, planStatus]);
   const draftSnapshot = useMemo(() => JSON.stringify(draftPayload), [draftPayload]);
   const hasPlanWork = ideas.length > 0 || slides.length > 0 || Boolean(activePlanId) || Boolean(planName.trim());
+  const draftPlans = useMemo(() => savedPlans.filter((savedPlan) => savedPlan.status !== "completed"), [savedPlans]);
+  const completedPlans = useMemo(() => savedPlans.filter((savedPlan) => savedPlan.status === "completed"), [savedPlans]);
 
   function setAddressablePlan(id: string | null) {
     const url = new URL(window.location.href);
@@ -226,6 +232,7 @@ export default function Home() {
     setIdeas(Array.isArray(payload.ideas) ? payload.ideas : []);
     setSlides(Array.isArray(payload.slides) ? payload.slides : []);
     setStep(typeof payload.step === "number" ? payload.step : 1);
+    setPlanStatus(payload.planStatus === "completed" || payload.planStatus === "sent_to_monday" || payload.planStatus === "approved" ? payload.planStatus : "draft");
     const usableBoards = Array.isArray(payload.boards) && payload.boards.length ? payload.boards : initialBoards;
     setBoards(usableBoards);
     setBoardId(typeof payload.boardId === "string" ? payload.boardId : usableBoards[0].id);
@@ -246,6 +253,7 @@ export default function Home() {
       if (!response.ok || !data?.plan?.payload) throw new Error(data?.error ?? "เปิดร่างแผนไม่สำเร็จ");
       applyDraftPayload(data.plan.payload);
       setActivePlanId(data.plan.id);
+      setPlanStatus(data.plan.status === "completed" || data.plan.status === "sent_to_monday" || data.plan.status === "approved" ? data.plan.status : "draft");
       setAddressablePlan(data.plan.id);
       lastSavedSnapshot.current = JSON.stringify(data.plan.payload);
       setLastSavedAt(data.plan.updatedAt ?? "");
@@ -260,21 +268,22 @@ export default function Home() {
     }
   }
 
-  async function saveDraft(mode: "auto" | "manual" = "auto") {
-    if (!hasPlanWork && mode === "auto") return;
-    const snapshot = JSON.stringify({ ...draftPayload, planName: planName.trim() });
-    if (mode === "auto" && snapshot === lastSavedSnapshot.current) return;
+  async function saveDraft(mode: "auto" | "manual" = "auto", nextStatus: PlanStatus = planStatus) {
+    if (!hasPlanWork && mode === "auto") return false;
+    const snapshot = JSON.stringify({ ...draftPayload, planName: planName.trim(), planStatus: nextStatus });
+    if (mode === "auto" && snapshot === lastSavedSnapshot.current) return true;
     const sequence = ++saveSequence.current;
     setSaveState("saving");
     try {
       const response = await fetch("/api/plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: activePlanId ?? undefined, payload: JSON.parse(snapshot) }),
+        body: JSON.stringify({ id: activePlanId ?? undefined, status: nextStatus, payload: JSON.parse(snapshot) }),
       });
       const data = await response.json().catch(() => null) as { plan?: SavedPlan & { payload?: DraftPayload; updatedAt?: string }; error?: string } | null;
       if (!response.ok || !data?.plan) throw new Error(data?.error ?? "บันทึกร่างแผนไม่สำเร็จ");
       setActivePlanId(data.plan.id);
+      setPlanStatus(nextStatus);
       setAddressablePlan(data.plan.id);
       lastSavedSnapshot.current = snapshot;
       setLastSavedAt(data.plan.updatedAt ?? new Date().toISOString());
@@ -295,9 +304,11 @@ export default function Home() {
       }
       if (sequence === saveSequence.current) setSaveState("saved");
       void refreshSavedPlans();
+      return true;
     } catch (error) {
       if (sequence === saveSequence.current) setSaveState("error");
       if (mode === "manual") setNotice(error instanceof Error ? error.message : "บันทึกร่างแผนไม่สำเร็จ");
+      return false;
     }
   }
 
@@ -336,11 +347,13 @@ export default function Home() {
     setSlides([]);
     setStep(1);
     setActivePlanId(null);
+    setPlanStatus("draft");
     setAddressablePlan(null);
     lastSavedSnapshot.current = "";
     setLastSavedAt("");
     setSaveState("idle");
     setShowNewPlanConfirm(false);
+    setShowCompleteConfirm(false);
     setNotice("เริ่มแผนใหม่แล้ว — ร่างเดิมยังอยู่ในรายการงานร่าง");
     scrollToId("brief");
   }
@@ -682,6 +695,7 @@ export default function Home() {
       const payload = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error ?? "บันทึกประวัติแผนไม่สำเร็จ");
       setStep(4);
+      await saveDraft("manual", "approved");
       setNotice("บันทึกการอนุมัติแล้ว — ขั้นต่อไปคือกระจายวันลงตลอดทั้งเดือน โดยดูจำนวนงานและประเภทงานในแต่ละวัน");
       scrollToId("month-calendar");
     } catch (error) {
@@ -723,11 +737,21 @@ export default function Home() {
       });
       const payload = await response.json() as { created?: number; error?: string; nextStep?: string };
       if (!response.ok) throw new Error(payload.nextStep ?? payload.error ?? "ส่ง Monday ไม่สำเร็จ");
+      await saveDraft("manual", "sent_to_monday");
       setNotice(`สร้าง ${payload.created ?? selectedIdeas.length} งานใน ${activeGroup.label} เรียบร้อยแล้ว`);
       setShowConfirm(false);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "ส่ง Monday ไม่สำเร็จ");
     }
+  }
+
+  async function completePlan() {
+    const saved = await saveDraft("manual", "completed");
+    if (!saved) return;
+    setShowCompleteConfirm(false);
+    setShowDrafts(false);
+    setShowArchive(true);
+    setNotice("ปิดงานและเก็บเข้าคลังแล้ว — เปิดดูหรือดาวน์โหลด PowerPoint ซ้ำได้ทุกเมื่อ");
   }
 
   const stages = ["ตั้งโจทย์", "คัดชุดไอเดีย", "ทำสไลด์", "อนุมัติแผน", "จัดวันและส่ง Monday"];
@@ -737,16 +761,22 @@ export default function Home() {
       <a className="brand" href="#top" aria-label="Marktech Content OS home"><span className="brand-mark">m</span><span><strong>marktech</strong><small>content planning OS</small></span></a>
       <div className="header-copy"><strong>วางแผนคอนเทนท์รายเดือน</strong><span>AI คิด → ทีมคัด → ลูกค้าอนุมัติ → ส่งทีมผลิต</span></div>
       <div className="draft-controls">
-        <span className={`save-indicator ${saveState}`} aria-live="polite">{saveState === "saving" ? "กำลังบันทึก…" : saveState === "saved" ? "บันทึกอัตโนมัติแล้ว" : saveState === "error" ? "บันทึกไม่สำเร็จ" : "ยังไม่มีร่าง"}{lastSavedAt && saveState === "saved" ? ` · ${new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(lastSavedAt))}` : ""}</span>
-        <button className="button button-secondary" onClick={() => setShowDrafts((value) => !value)} type="button">งานร่าง {savedPlans.length}</button>
+        <span className={`save-indicator ${saveState}`} aria-live="polite">{saveState === "saving" ? "กำลังบันทึก…" : saveState === "saved" ? planStatus === "completed" ? "เก็บเข้าคลังแล้ว" : "บันทึกอัตโนมัติแล้ว" : saveState === "error" ? "บันทึกไม่สำเร็จ" : "ยังไม่มีร่าง"}{lastSavedAt && saveState === "saved" ? ` · ${new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(lastSavedAt))}` : ""}</span>
+        <button className="button button-secondary" onClick={() => { setShowDrafts((value) => !value); setShowArchive(false); }} type="button">งานระหว่างทำ {draftPlans.length}</button>
+        <button className="button button-secondary" onClick={() => { setShowArchive((value) => !value); setShowDrafts(false); }} type="button">คลังงานเสร็จ {completedPlans.length}</button>
         <button className="button button-secondary" onClick={() => void saveDraft("manual")} disabled={saveState === "saving"} type="button">บันทึกตอนนี้</button>
+        {hasPlanWork && planStatus !== "completed" && <button className="button button-secondary" onClick={() => setShowCompleteConfirm(true)} type="button">ปิดงานเข้าคลัง</button>}
         <button className="button button-primary" onClick={() => hasPlanWork ? setShowNewPlanConfirm(true) : resetPlan()} type="button">+ เริ่มแผนใหม่</button>
       </div>
     </header>
 
     {showDrafts && <section className="draft-panel" aria-label="รายการงานร่าง">
       <div><p className="eyebrow">งานร่างที่บันทึกไว้</p><h2>กลับมาทำต่อได้ทุกแผน</h2><p>เลือกเปิดร่างที่เคยทำไว้ ระบบจะโหลดไอเดีย สไลด์ และภาพ mockup กลับมาให้ครบ</p></div>
-      <div className="draft-list">{savedPlans.length ? savedPlans.map((savedPlan) => <article key={savedPlan.id} className={savedPlan.id === activePlanId ? "active" : ""}><div><strong>{savedPlan.title}</strong><span>{savedPlan.client} · {savedPlan.planMonth} · แก้ล่าสุด {new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(savedPlan.updatedAt))}</span></div><div><button className="text-button" type="button" onClick={() => void loadPlan(savedPlan.id)}>เปิดทำต่อ</button><button className="text-button text-button-danger" type="button" onClick={() => { if (window.confirm(`ลบร่าง “${savedPlan.title}” ใช่หรือไม่? การลบนี้ย้อนกลับไม่ได้`)) void deletePlan(savedPlan.id); }}>ลบ</button></div></article>) : <div className="empty-drafts">ยังไม่มีงานร่าง — เริ่มสร้างไอเดียแล้วระบบจะบันทึกให้อัตโนมัติ</div>}</div>
+      <div className="draft-list">{draftPlans.length ? draftPlans.map((savedPlan) => <article key={savedPlan.id} className={savedPlan.id === activePlanId ? "active" : ""}><div><strong>{savedPlan.title}</strong><span>{savedPlan.client} · {savedPlan.planMonth} · {savedPlan.status === "sent_to_monday" ? "ส่ง Monday แล้ว" : savedPlan.status === "approved" ? "แผนผ่านแล้ว" : "ร่าง"} · แก้ล่าสุด {new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(savedPlan.updatedAt))}</span></div><div><button className="text-button" type="button" onClick={() => void loadPlan(savedPlan.id)}>เปิดทำต่อ</button><button className="text-button text-button-danger" type="button" onClick={() => { if (window.confirm(`ลบร่าง “${savedPlan.title}” ใช่หรือไม่? การลบนี้ย้อนกลับไม่ได้`)) void deletePlan(savedPlan.id); }}>ลบ</button></div></article>) : <div className="empty-drafts">ยังไม่มีงานระหว่างทำ — เริ่มสร้างไอเดียแล้วระบบจะบันทึกให้อัตโนมัติ</div>}</div>
+    </section>}
+    {showArchive && <section className="draft-panel archive-panel" aria-label="คลังงานเสร็จ">
+      <div><p className="eyebrow">คลังงานเสร็จ</p><h2>แผนที่ปิดงานแล้ว</h2><p>ทุกชิ้นเก็บสไลด์ รายละเอียด และภาพ mockup ไว้ครบ เปิดดู แก้ หรือดาวน์โหลด PowerPoint ซ้ำได้ทุกเมื่อ</p></div>
+      <div className="draft-list">{completedPlans.length ? completedPlans.map((savedPlan) => <article key={savedPlan.id} className={savedPlan.id === activePlanId ? "active" : ""}><div><strong>{savedPlan.title}</strong><span>{savedPlan.client} · {savedPlan.planMonth} · ปิดงานเมื่อ {new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(savedPlan.updatedAt))}</span></div><div><button className="text-button" type="button" onClick={() => void loadPlan(savedPlan.id)}>เปิดดู / โหลด</button><button className="text-button text-button-danger" type="button" onClick={() => { if (window.confirm(`ลบงานเสร็จ “${savedPlan.title}” ใช่หรือไม่? จะไม่สามารถกู้สไลด์และภาพกลับมาได้`)) void deletePlan(savedPlan.id); }}>ลบ</button></div></article>) : <div className="empty-drafts">ยังไม่มีงานในคลัง — เมื่อส่งมอบหรือทำงานเสร็จ ให้กด “ปิดงานเข้าคลัง”</div>}</div>
     </section>}
 
     <section className="hero">
@@ -806,6 +836,7 @@ export default function Home() {
     </section>}
 
     {showConfirm && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><section className="confirm-modal"><p className="eyebrow">ก่อนส่งจริง</p><h2 id="confirm-title">ยืนยันสร้าง {selectedIdeas.length} งานใน Monday</h2><p>Board: <strong>{activeBoard.name}</strong> · Group: <strong>{activeGroup.label}</strong></p><div className="confirm-list">{selectedIdeas.map((idea, index) => <div key={idea.id}><span>{idea.id}</span><strong>{titleForMonday(client, planMonth, index + 1, idea)}</strong><time>{idea.date ? thaiDate(idea.date) : "ยังไม่มีวัน"}</time></div>)}</div><div className="modal-actions"><button className="button button-secondary" onClick={() => setShowConfirm(false)} type="button">กลับไปแก้</button><button className="button button-primary" onClick={confirmMonday} type="button">ยืนยันส่ง {selectedIdeas.length} งาน</button></div></section></div>}
+    {showCompleteConfirm && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="complete-plan-title"><section className="confirm-modal new-plan-modal"><p className="eyebrow">ปิดงานและเก็บเข้าคลัง</p><h2 id="complete-plan-title">ยืนยันว่าแผนนี้เสร็จเรียบร้อยแล้ว?</h2><p>ระบบจะย้ายงานนี้ออกจาก “งานระหว่างทำ” ไปอยู่ในคลัง พร้อมสไลด์ ภาพ mockup และข้อมูลสำหรับดาวน์โหลดซ้ำภายหลัง</p><div className="modal-actions"><button className="button button-secondary" onClick={() => setShowCompleteConfirm(false)} type="button">ยังทำต่อ</button><button className="button button-primary" onClick={() => void completePlan()} type="button">ยืนยันปิดงานเข้าคลัง</button></div></section></div>}
     {showNewPlanConfirm && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="new-plan-title"><section className="confirm-modal new-plan-modal"><p className="eyebrow">เริ่มแผนใหม่</p><h2 id="new-plan-title">ต้องการทำกับแผนที่กำลังเปิดอยู่แบบไหน?</h2><p>ถ้าบันทึกแล้ว ร่างเดิมจะอยู่ในรายการให้กลับมาเปิดต่อได้เสมอ</p><div className="new-plan-choices"><button className="choice-card" type="button" onClick={async () => { await saveDraft("manual"); resetPlan(); }}><strong>บันทึกร่างนี้ แล้วเริ่มแผนใหม่</strong><span>เหมาะเมื่ออยากเก็บสิ่งที่แก้ล่าสุดไว้ก่อน</span></button><button className="choice-card danger" type="button" onClick={resetPlan}><strong>เริ่มแผนใหม่โดยไม่บันทึกการแก้ล่าสุด</strong><span>ร่างที่เคยบันทึกไว้จะไม่ถูกลบ แต่การแก้ครั้งนี้จะหายไป</span></button></div><div className="modal-actions"><button className="button button-secondary" onClick={() => setShowNewPlanConfirm(false)} type="button">อยู่ทำแผนนี้ต่อ</button></div></section></div>}
   </main>;
 }

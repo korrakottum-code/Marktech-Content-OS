@@ -132,7 +132,7 @@ export async function POST(request: Request) {
   const title = safePlanTitle(payload);
   const client = typeof payload.client === "string" && payload.client.trim() ? payload.client.trim() : "ลูกค้าใหม่";
   const month = typeof payload.planMonth === "string" && payload.planMonth ? payload.planMonth : "";
-  const status = body.status === "approved" || body.status === "sent_to_monday" ? body.status : "draft";
+  const status = body.status === "approved" || body.status === "sent_to_monday" || body.status === "completed" ? body.status : "draft";
   await env.DB.prepare(
     `INSERT INTO plan_drafts (id, title, client_name, plan_month, status, payload)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
