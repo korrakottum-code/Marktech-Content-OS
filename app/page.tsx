@@ -210,6 +210,7 @@ export default function Home() {
   const ideaPillars = useMemo(() => Array.from(new Set(ideas.map((idea) => idea.pillar))), [ideas]);
   const ideaCategories = useMemo(() => Array.from(new Set(ideas.map((idea) => idea.category))), [ideas]);
   const ideaPoolSize = suggestionCount(quantity);
+  const reviewedBriefs = useMemo(() => briefs.filter((brief) => brief.product || brief.goal || brief.painFocus), [briefs]);
 
   const draftPayload = useMemo<DraftPayload>(() => ({
     planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, planningGoal, freshContext, brandMood,
@@ -456,7 +457,7 @@ export default function Home() {
       if (typeof parsed.quantity === "number") setQuantity(Math.max(1, Math.min(36, parsed.quantity)));
       if (Array.isArray(parsed.requestedCategories)) setRequestedCategories(parsed.requestedCategories);
       if (Array.isArray(parsed.briefs) && parsed.briefs.length) {
-        setBriefs(parsed.briefs.slice(0, 8).map((brief, index) => ({
+        setBriefs(parsed.briefs.slice(0, 20).map((brief, index) => ({
           id: `brief-ai-${Date.now()}-${index + 1}`,
           product: String(brief.product ?? "ไม่ระบุโปรดักต์"), goal: String(brief.goal ?? ""), painFocus: String(brief.painFocus ?? ""),
           customNeed: String(brief.customNeed ?? ""), price: String(brief.price ?? ""), priceUnit: String(brief.priceUnit ?? ""),
@@ -865,7 +866,8 @@ export default function Home() {
       </div>
       {briefSummary && <section className="brief-review" aria-label="ตรวจโจทย์ก่อนสร้างไอเดีย">
         <div className="brief-review-heading"><div><p className="eyebrow">หยุดตรวจ 1 ครั้งก่อนสร้าง</p><h3>ตรวจโจทย์และภาพอ้างอิง</h3><p>นี่คือสิ่งที่ AI จะแจกไปสร้างไอเดีย คุณแก้รายละเอียดได้ด้านล่าง หรือยืนยันเพื่อเริ่มสร้างได้เลย</p></div><button className="text-button" type="button" onClick={() => setAdvancedBriefOpen(true)}>แก้รายละเอียด</button></div>
-        <div className="brief-review-products">{briefs.filter((brief) => brief.product || brief.goal || brief.painFocus).map((brief) => <article key={brief.id}><strong>{brief.product || "เรื่องทั่วไป"}</strong><span>{brief.goal || "ยังไม่ได้ระบุสิ่งที่อยากสื่อ"}</span><small>{brief.painFocus || "ยังไม่ได้ระบุ pain / สถานการณ์"}</small></article>)}</div>
+        <div className="brief-counts"><span>AI แยกได้ <strong>{reviewedBriefs.length} เรื่อง</strong> จากโจทย์</span><strong>เมื่อยืนยัน ระบบจะสร้าง <b>{ideaPoolSize} ไอเดีย</b></strong></div>
+        <div className="brief-review-products">{reviewedBriefs.map((brief) => <article key={brief.id}><strong>{brief.product || "เรื่องทั่วไป"}</strong><span>{brief.goal || "ยังไม่ได้ระบุสิ่งที่อยากสื่อ"}</span><small>{brief.painFocus || "ยังไม่ได้ระบุ pain / สถานการณ์"}</small></article>)}</div>
         <div className="brand-art-direction"><label>Mood / tone ของแบรนด์<textarea value={brandMood} onChange={(event) => setBrandMood(event.target.value)} placeholder="เช่น premium navy-gold, สนุกสดใส pink-yellow, minimal clean หรือข้อห้ามของแบรนด์" /></label><div className="brand-reference-control"><label className="brand-reference-upload">{brandReferenceImage ? "เปลี่ยน Logo / mood reference" : "อัปโหลด Logo / mood reference"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { uploadBrandReference(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>{brandReferenceImage ? <div className="brand-reference-preview"><img src={brandReferenceImage} alt={`ภาพอ้างอิงแบรนด์ ${brandReferenceName || "ที่อัปโหลด"}`} /><div><strong>{brandReferenceName || "Logo / mood reference"}</strong><span>จะใช้กับภาพ mockup ที่สร้างหลังจากนี้</span></div><button className="text-button text-button-danger" type="button" onClick={clearBrandReference}>ล้างภาพ</button></div> : <span className="brand-reference-hint">ใส่ก่อนสร้างไอเดียได้เลย ระบบจะเก็บไว้ใช้สร้าง mockup ของแผนนี้</span>}{brandReferenceStatus && <span className={`brand-reference-status ${brandReferenceImage ? "ready" : "error"}`}>{brandReferenceStatus}</span>}</div></div>
         <div className="action-row"><button className="button button-primary" type="button" onClick={generateIdeas} disabled={isGenerating}>{isGenerating ? `AI กำลังคิด ${ideaPoolSize} ทางเลือก…` : `ยืนยันโจทย์ · ให้ AI คิด ${ideaPoolSize} ทางเลือก →`}</button><span>ไอเดียจะยังไม่ถูกสร้างจนกว่าจะกดปุ่มนี้</span></div>
       </section>}
