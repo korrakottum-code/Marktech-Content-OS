@@ -5,6 +5,7 @@ import PptxGenJS from "pptxgenjs";
 import { balancedDates } from "@/lib/planning.js";
 
 type Format = "วิดีโอ" | "ภาพ" | "อัลบั้ม";
+type PlanningGoal = "sales" | "trust" | "balanced" | "trend";
 type ProductBrief = { id: string; product: string; goal: string; customNeed: string; price: string; priceUnit: string };
 type Idea = {
   id: string;
@@ -16,6 +17,9 @@ type Idea = {
   format: Format;
   pillar: string;
   category: "โปรโมชั่น / Offer" | "รีวิว / Proof" | "ความรู้ / FAQ" | "แบรนด์ / ไลฟ์สไตล์";
+  mechanism?: string;
+  funnel?: string;
+  angle?: string;
   priceLabel?: string;
   visualDirection: string;
   adaptation: string;
@@ -30,14 +34,14 @@ type PlanStatus = "draft" | "approved" | "sent_to_monday" | "completed";
 type SavedPlan = { id: string; title: string; client: string; planMonth: string; status: PlanStatus; updatedAt: string };
 type DraftPayload = {
   planName: string; client: string; serviceScope: "content" | "ads_only"; industry: string; reusePolicy: "avoid" | "adapt";
-  requestedCategories: Idea["category"][]; planMonth: string; theme: string; brandMood: string; brandReferenceImage: string | null;
+  requestedCategories: Idea["category"][]; planMonth: string; theme: string; planningGoal: PlanningGoal; freshContext: string; brandMood: string; brandReferenceImage: string | null;
   brandReferenceName: string; brandReferenceStatus: string; quantity: number; briefs: ProductBrief[]; ideas: Idea[]; slides: Slide[];
   step: number; groupId: string; boardId: string; boards: BoardOption[]; planStatus: PlanStatus;
 };
 type EditableIdeaField = "product" | "title" | "hook" | "priceLabel" | "reason" | "pillar" | "visualDirection" | "adaptation";
 
-function suggestionCount(quantity: number) {
-  return Math.min(20, Math.max(quantity, Math.ceil(quantity * 1.5)));
+function suggestionCount(_quantity: number) {
+  return 36;
 }
 
 const contentClients = ["NV", "Root Privé", "Fill-D", "Be Bright", "A&B Clinic", "Sherlyn", "Facial Studio", "Luxe Aesthetics"];
@@ -141,6 +145,8 @@ export default function Home() {
   const [requestedCategories, setRequestedCategories] = useState<Idea["category"][]>([]);
   const [planMonth, setPlanMonth] = useState(monthNow);
   const [theme, setTheme] = useState("เพิ่มบทสนทนาที่มีโอกาสนัด และมีคอนเทนท์ที่ใช้ยิงแอดต่อได้");
+  const [planningGoal, setPlanningGoal] = useState<PlanningGoal>("sales");
+  const [freshContext, setFreshContext] = useState("");
   const [brandMood, setBrandMood] = useState("");
   const [brandReferenceImage, setBrandReferenceImage] = useState<string | null>(null);
   const [brandReferenceName, setBrandReferenceName] = useState("");
@@ -198,10 +204,10 @@ export default function Home() {
   const ideaPoolSize = suggestionCount(quantity);
 
   const draftPayload = useMemo<DraftPayload>(() => ({
-    planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, brandMood,
+    planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, planningGoal, freshContext, brandMood,
     brandReferenceImage, brandReferenceName, brandReferenceStatus, quantity, briefs, ideas, slides, step,
     groupId, boardId, boards, planStatus,
-  }), [planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, brandMood, brandReferenceImage, brandReferenceName, brandReferenceStatus, quantity, briefs, ideas, slides, step, groupId, boardId, boards, planStatus]);
+  }), [planName, client, serviceScope, industry, reusePolicy, requestedCategories, planMonth, theme, planningGoal, freshContext, brandMood, brandReferenceImage, brandReferenceName, brandReferenceStatus, quantity, briefs, ideas, slides, step, groupId, boardId, boards, planStatus]);
   const draftSnapshot = useMemo(() => JSON.stringify(draftPayload), [draftPayload]);
   const hasPlanWork = ideas.length > 0 || slides.length > 0 || Boolean(activePlanId) || Boolean(planName.trim());
   const draftPlans = useMemo(() => savedPlans.filter((savedPlan) => savedPlan.status !== "completed"), [savedPlans]);
@@ -223,6 +229,8 @@ export default function Home() {
     setRequestedCategories(Array.isArray(payload.requestedCategories) ? payload.requestedCategories : []);
     setPlanMonth(typeof payload.planMonth === "string" ? payload.planMonth : monthNow());
     setTheme(typeof payload.theme === "string" ? payload.theme : "");
+    setPlanningGoal(payload.planningGoal === "trust" || payload.planningGoal === "balanced" || payload.planningGoal === "trend" ? payload.planningGoal : "sales");
+    setFreshContext(typeof payload.freshContext === "string" ? payload.freshContext : "");
     setBrandMood(typeof payload.brandMood === "string" ? payload.brandMood : "");
     setBrandReferenceImage(typeof payload.brandReferenceImage === "string" ? payload.brandReferenceImage : null);
     setBrandReferenceName(typeof payload.brandReferenceName === "string" ? payload.brandReferenceName : "");
@@ -337,6 +345,8 @@ export default function Home() {
     setRequestedCategories([]);
     setPlanMonth(monthNow());
     setTheme("เพิ่มบทสนทนาที่มีโอกาสนัด และมีคอนเทนท์ที่ใช้ยิงแอดต่อได้");
+    setPlanningGoal("sales");
+    setFreshContext("");
     setBrandMood("");
     setBrandReferenceImage(null);
     setBrandReferenceName("");
@@ -420,7 +430,7 @@ export default function Home() {
       const response = await fetch("/api/ideas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client, planMonth, theme, quantity, briefs: usableBriefs, industry, reusePolicy, categories: requestedCategories }),
+        body: JSON.stringify({ client, planMonth, theme, quantity, briefs: usableBriefs, industry, reusePolicy, categories: requestedCategories, planningGoal, freshContext }),
       });
       const payload = await response.json() as { ideas?: Omit<Idea, "selected" | "date">[]; error?: string; nextStep?: string };
       if (!response.ok || !payload.ideas) throw new Error(payload.nextStep ?? payload.error ?? "AI ยังสร้างไอเดียไม่ได้");
@@ -428,7 +438,7 @@ export default function Home() {
       setIdeas(payload.ideas.map((idea, index) => ({ ...idea, id: idea.id || `IDEA-${String(index + 1).padStart(2, "0")}`, selected: recommendedIds.has(idea.id || `IDEA-${String(index + 1).padStart(2, "0")}`) })));
       setSlides([]);
       setStep(2);
-      setNotice(`AI สร้าง ${payload.ideas.length} ทางเลือกแล้ว — เลือก ${quantity} ชิ้นแรกไว้ให้ และคุณแก้หรือเพิ่มไอเดียเองได้ทุกชิ้น`);
+      setNotice(`AI วางโครง 8 กลไกและสร้าง ${payload.ideas.length} ทางเลือกแล้ว — เลือก ${quantity} ชิ้นแรกไว้ให้ และคุณแก้หรือเพิ่มไอเดียเองได้ทุกชิ้น`);
       scrollToId("idea-selection");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "ยังเชื่อม AI ไม่สำเร็จ");
@@ -452,11 +462,11 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          client, planMonth, theme, quantity: count, briefs: usableBriefs, industry, reusePolicy, categories: requestedCategories,
+          client, planMonth, theme, quantity: count, briefs: usableBriefs, industry, reusePolicy, categories: requestedCategories, planningGoal, freshContext,
           mode: "additional",
           focusBrief,
           additionalDirection: additionalDirection.trim(),
-          existingIdeas: ideas.map(({ title, hook, product, pillar, category }) => ({ title, hook, product, pillar, category })),
+          existingIdeas: ideas.map(({ title, hook, product, pillar, category, mechanism }) => ({ title, hook, product, pillar, category, mechanism })),
         }),
       });
       const payload = await response.json() as { ideas?: Omit<Idea, "selected" | "date">[]; error?: string; nextStep?: string };
@@ -797,10 +807,12 @@ export default function Home() {
         <label>อุตสาหกรรม / ธุรกิจ<input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="เช่น ร้านอาหาร, อสังหาริมทรัพย์" /></label>
         <label>เดือนที่ต้องการแพลน<input aria-label="เดือนที่ต้องการแพลน" type="month" value={planMonth} onChange={(event) => setPlanMonth(event.target.value)} /></label>
         <label className="span-two">คอนเซ็ปต์หรือเป้าหมายหลักของเดือน<textarea value={theme} onChange={(event) => setTheme(event.target.value)} placeholder="เช่น เดือนนี้ต้องการให้คนเข้าใจว่า Botox ไม่ได้ทำให้หน้าตึง และพาไปสู่การนัด" /></label>
+        <label>น้ำหนักแผน<select value={planningGoal} onChange={(event) => setPlanningGoal(event.target.value as PlanningGoal)}><option value="sales">เน้นปิดการขาย</option><option value="trust">เน้นความน่าเชื่อถือ</option><option value="balanced">คละอย่างสมดุล</option><option value="trend">เน้นบริบท/กระแส</option></select></label>
+        <label className="span-two">บริบทสดที่อยากให้หยิบใช้ <small>(โปรจริง, เทศกาล, ข่าว, เทรนด์, format ที่กำลังมา)</small><textarea value={freshContext} onChange={(event) => setFreshContext(event.target.value)} placeholder="เช่น โปรสิ้นเดือน: Botox 50 ยูนิต ราคา… / เปิดสาขาใหม่ / ช่วงเปิดเทอม / คลิป POV แบบ…  ถ้าไม่มีให้เว้นว่าง ระบบจะไม่แต่งเทรนด์ขึ้นเอง" /></label>
         <label>อยากได้กี่ชิ้นในแผน<input type="number" min="1" max="40" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(40, Number(event.target.value) || 1)))} /></label>
         <label>การนำไอเดียเดิมมาใช้<select value={reusePolicy} onChange={(event) => setReusePolicy(event.target.value as "avoid" | "adapt")}><option value="adapt">Copy-to-Adapt ตามโปร/บริบทเดือนนี้</option><option value="avoid">เปิดมุมใหม่เป็นหลัก</option></select></label>
       </div>
-      <fieldset className="category-picker"><legend>ประเภทคอนเทนท์ที่อยากได้ <small>ไม่เลือก = ให้ AI คละตามโจทย์</small></legend><div>{categoryChoices.map((category) => <label key={category}><input type="checkbox" checked={requestedCategories.includes(category)} onChange={() => setRequestedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category])} />{category}</label>)}</div></fieldset>
+      <fieldset className="category-picker"><legend>ประเภทคอนเทนท์ที่อยากได้ <small>ไม่เลือก = ระบบกระจาย 8 กลไกให้อัตโนมัติ</small></legend><div>{categoryChoices.map((category) => <label key={category}><input type="checkbox" checked={requestedCategories.includes(category)} onChange={() => setRequestedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category])} />{category}</label>)}</div><p className="mechanism-note">ระบบจะวางโครงก่อนเขียน: Offer · Proof · Expert · Scenario · Interactive · Conversion · Trend · Behind the scenes แล้วตรวจคำเปิดและมุมซ้ำก่อนแสดงผล</p></fieldset>
       <div className="brand-art-direction"><label>Mood / tone ของแบรนด์<textarea value={brandMood} onChange={(event) => setBrandMood(event.target.value)} placeholder="เช่น premium navy-gold, สนุกสดใส pink-yellow, minimal clean หรือข้อห้ามของแบรนด์" /></label><div className="brand-reference-control"><label className="brand-reference-upload">{brandReferenceImage ? "เปลี่ยน Logo / mood reference" : "อัปโหลด Logo / mood reference"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { uploadBrandReference(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>{brandReferenceImage ? <div className="brand-reference-preview"><img src={brandReferenceImage} alt={`ภาพอ้างอิงแบรนด์ ${brandReferenceName || "ที่อัปโหลด"}`} /><div><strong>{brandReferenceName || "Logo / mood reference"}</strong><span>พร้อมใช้กับการสร้างภาพครั้งถัดไปทุกชิ้น</span></div><button className="text-button text-button-danger" type="button" onClick={clearBrandReference}>ล้างภาพ</button></div> : <span className="brand-reference-hint">ใช้เป็น tone / logo reference กับภาพที่จะสร้างหลังจากนี้</span>}{brandReferenceStatus && <span className={`brand-reference-status ${brandReferenceImage ? "ready" : "error"}`}>{brandReferenceStatus}</span>}</div></div>
       <div className="product-briefs"><div className="section-label"><div><strong>โปรดักต์ / เรื่องที่อยากสื่อ</strong><span>เพิ่มได้หลายแถว และใช้ “ไม่ระบุโปรดักต์” สำหรับเรื่องแบรนด์ โปร หรือคอนเทนท์ทั่วไป</span></div><button className="text-button" type="button" onClick={addBrief}>+ เพิ่มเรื่อง</button></div>
         {briefs.map((brief, index) => <div className="product-row" key={brief.id}><strong className="row-number">{index + 1}</strong><label>โปรดักต์<input aria-label={`โปรดักต์ ${index + 1}`} list="product-options" value={brief.product} onChange={(event) => updateBrief(brief.id, "product", event.target.value)} placeholder="พิมพ์ชื่อโปรดักต์ได้" /></label><label>อยากให้สื่ออะไร<input value={brief.goal} onChange={(event) => updateBrief(brief.id, "goal", event.target.value)} placeholder="เช่น ชวนคนที่ลังเลให้ทัก" /></label><label>ราคา <small>(ไม่บังคับ)</small><input inputMode="decimal" value={brief.price} onChange={(event) => updateBrief(brief.id, "price", event.target.value)} placeholder="เช่น 3,990" /></label><label>หน่วย <small>(ไม่บังคับ)</small><input value={brief.priceUnit} onChange={(event) => updateBrief(brief.id, "priceUnit", event.target.value)} placeholder="เช่น บาท / ต่อครั้ง" /></label><label>เงื่อนไข / ความต้องการเพิ่ม<input value={brief.customNeed} onChange={(event) => updateBrief(brief.id, "customNeed", event.target.value)} placeholder="เช่น ใช้หมอพูด, มีโปร 2.2" /></label><button className="icon-button" type="button" aria-label={`ลบเรื่องที่ ${index + 1}`} disabled={briefs.length === 1} onClick={() => removeBrief(brief.id)}>×</button></div>)}<datalist id="product-options">{productOptions.map((option) => <option key={option} value={option} />)}</datalist></div>
@@ -812,7 +824,7 @@ export default function Home() {
       <div className="selection-summary"><strong>เลือก {selectedIdeas.length} / {ideas.length} ชิ้น</strong><span>คัดตามความเหมาะสมของแผน ไม่บังคับสัดส่วน Promotion / Offer</span></div>
       <div className="additional-generator"><div className="additional-intro"><strong>ไอเดียยังไม่พอ?</strong><span>ระบุว่าจะเติมเรื่องไหนและขยี้ pain แบบใดได้ — ชุดเดิมจะอยู่ครบ</span></div><label>เติมให้เรื่อง<select aria-label="โปรดักต์หรือเรื่องที่จะให้ AI เติม" value={additionalBriefId} onChange={(event) => setAdditionalBriefId(event.target.value)}><option value="all">ให้ AI เลือกจากทุก brief</option>{briefs.map((brief) => <option key={brief.id} value={brief.id}>{brief.product}{brief.goal ? ` · ${brief.goal}` : ""}</option>)}<option value="custom">+ พิมพ์โปรดักต์ / เรื่องใหม่</option></select></label>{additionalBriefId === "custom" && <label className="additional-direction">โปรดักต์ / เรื่องใหม่<input aria-label="โปรดักต์หรือเรื่องใหม่ที่จะให้ AI เติม" value={additionalCustomProduct} onChange={(event) => setAdditionalCustomProduct(event.target.value)} placeholder="เช่น Filler คาง / HIFU" /></label>}<label className="additional-direction">อยากให้เพิ่มแบบไหน<input aria-label="มุมหรือปัญหาที่อยากให้ AI เพิ่ม" value={additionalDirection} onChange={(event) => setAdditionalDirection(event.target.value)} placeholder="เช่น คนที่กลัวหน้าตึง / เปรียบเทียบทางเลือก" /></label><label>จำนวน<input aria-label="จำนวนไอเดียที่เพิ่ม" type="number" min="1" max="20" value={additionalIdeaCount} onChange={(event) => setAdditionalIdeaCount(Math.max(1, Math.min(20, Number(event.target.value) || 1)))} /></label><button className="button button-secondary" type="button" onClick={generateMoreIdeas} disabled={isGenerating}>{isGenerating ? "AI กำลังเติม…" : `ให้ AI เพิ่ม ${additionalIdeaCount} ไอเดีย`}</button></div>
       <div className="idea-filters"><label>ประเภทคอนเทนท์<select value={ideaCategoryFilter} onChange={(event) => setIdeaCategoryFilter(event.target.value)}><option>ทั้งหมด</option>{ideaCategories.map((item) => <option key={item}>{item}</option>)}</select></label><label>โปรดักต์<select value={ideaProductFilter} onChange={(event) => setIdeaProductFilter(event.target.value)}><option>ทั้งหมด</option>{ideaProducts.map((item) => <option key={item}>{item}</option>)}</select></label><label>รูปแบบ<select value={ideaFormatFilter} onChange={(event) => setIdeaFormatFilter(event.target.value)}><option>ทั้งหมด</option><option>วิดีโอ</option><option>ภาพ</option><option>อัลบั้ม</option></select></label><label>มุมเล่า<select value={ideaPillarFilter} onChange={(event) => setIdeaPillarFilter(event.target.value)}><option>ทั้งหมด</option>{ideaPillars.map((item) => <option key={item}>{item}</option>)}</select></label><span>แสดง {visibleIdeas.length} จาก {ideas.length} ไอเดีย</span></div>
-      <div className="idea-grid">{visibleIdeas.map((idea) => <article className={`idea-tile ${idea.selected ? "selected" : ""}`} key={idea.id}><button className="idea-select" onClick={() => toggleIdea(idea.id)} aria-pressed={idea.selected} type="button"><span>{idea.selected ? "✓ เลือกแล้ว" : "+ เลือก"} · {idea.format}</span><strong>{idea.title}</strong><p>{idea.hook}</p>{idea.priceLabel && <b className="idea-price">{idea.priceLabel}</b>}<em>{idea.category} · {idea.product}</em><small>{idea.adaptation}</small></button><div className="idea-actions"><button className="text-button" type="button" onClick={() => setEditingIdeaId((current) => current === idea.id ? null : idea.id)}>{editingIdeaId === idea.id ? "ปิดการแก้ไข" : "แก้ไขไอเดีย"}</button><button className="text-button text-button-danger" type="button" onClick={() => removeIdea(idea.id)}>ลบไอเดีย</button></div>{editingIdeaId === idea.id && <div className="idea-editor"><label>หัวข้อ<input value={idea.title} onChange={(event) => updateIdea(idea.id, "title", event.target.value)} /></label><label>Hook<textarea value={idea.hook} onChange={(event) => updateIdea(idea.id, "hook", event.target.value)} /></label><label>ราคา / ข้อเสนอ<input value={idea.priceLabel ?? ""} onChange={(event) => updateIdea(idea.id, "priceLabel", event.target.value)} placeholder="เช่น 699 บาท / 10 cc" /></label><label>โปรดักต์ / เรื่อง<input value={idea.product} onChange={(event) => updateIdea(idea.id, "product", event.target.value)} /></label><label>รูปแบบ<select value={idea.format} onChange={(event) => updateIdeaFormat(idea.id, event.target.value as Format)}><option>วิดีโอ</option><option>ภาพ</option><option>อัลบั้ม</option></select></label><label>ประเภท<select value={idea.category} onChange={(event) => updateIdeaCategory(idea.id, event.target.value as Idea["category"])}><option>โปรโมชั่น / Offer</option><option>รีวิว / Proof</option><option>ความรู้ / FAQ</option><option>แบรนด์ / ไลฟ์สไตล์</option></select></label><label>มุมเล่า<input value={idea.pillar} onChange={(event) => updateIdea(idea.id, "pillar", event.target.value)} /></label><label>เหตุผลที่ควรทำ<textarea value={idea.reason} onChange={(event) => updateIdea(idea.id, "reason", event.target.value)} /></label><label>แนวภาพโพสต์ Facebook<textarea value={idea.visualDirection} onChange={(event) => updateIdea(idea.id, "visualDirection", event.target.value)} /></label></div>}</article>)}</div>
+      <div className="idea-grid">{visibleIdeas.map((idea) => <article className={`idea-tile ${idea.selected ? "selected" : ""}`} key={idea.id}><button className="idea-select" onClick={() => toggleIdea(idea.id)} aria-pressed={idea.selected} type="button"><span>{idea.selected ? "✓ เลือกแล้ว" : "+ เลือก"} · {idea.format}</span><strong>{idea.title}</strong><p>{idea.hook}</p>{idea.priceLabel && <b className="idea-price">{idea.priceLabel}</b>}<em>{idea.category} · {idea.product}</em>{idea.mechanism && <small className="mechanism-label">กลไก: {idea.mechanism} · {idea.funnel || "consideration"}</small>}{idea.angle && <small className="angle-label">มุม: {idea.angle}</small>}<small>{idea.adaptation}</small></button><div className="idea-actions"><button className="text-button" type="button" onClick={() => setEditingIdeaId((current) => current === idea.id ? null : idea.id)}>{editingIdeaId === idea.id ? "ปิดการแก้ไข" : "แก้ไขไอเดีย"}</button><button className="text-button text-button-danger" type="button" onClick={() => removeIdea(idea.id)}>ลบไอเดีย</button></div>{editingIdeaId === idea.id && <div className="idea-editor"><label>หัวข้อ<input value={idea.title} onChange={(event) => updateIdea(idea.id, "title", event.target.value)} /></label><label>Hook<textarea value={idea.hook} onChange={(event) => updateIdea(idea.id, "hook", event.target.value)} /></label><label>ราคา / ข้อเสนอ<input value={idea.priceLabel ?? ""} onChange={(event) => updateIdea(idea.id, "priceLabel", event.target.value)} placeholder="เช่น 699 บาท / 10 cc" /></label><label>โปรดักต์ / เรื่อง<input value={idea.product} onChange={(event) => updateIdea(idea.id, "product", event.target.value)} /></label><label>รูปแบบ<select value={idea.format} onChange={(event) => updateIdeaFormat(idea.id, event.target.value as Format)}><option>วิดีโอ</option><option>ภาพ</option><option>อัลบั้ม</option></select></label><label>ประเภท<select value={idea.category} onChange={(event) => updateIdeaCategory(idea.id, event.target.value as Idea["category"])}><option>โปรโมชั่น / Offer</option><option>รีวิว / Proof</option><option>ความรู้ / FAQ</option><option>แบรนด์ / ไลฟ์สไตล์</option></select></label><label>มุมเล่า<input value={idea.pillar} onChange={(event) => updateIdea(idea.id, "pillar", event.target.value)} /></label><label>เหตุผลที่ควรทำ<textarea value={idea.reason} onChange={(event) => updateIdea(idea.id, "reason", event.target.value)} /></label><label>แนวภาพโพสต์ Facebook<textarea value={idea.visualDirection} onChange={(event) => updateIdea(idea.id, "visualDirection", event.target.value)} /></label></div>}</article>)}</div>
       <div className="sticky-action"><span><strong>{selectedIdeas.length} ไอเดีย</strong> พร้อมรวมเป็นข้อเสนอ</span><button className="button button-primary" onClick={makeProposal} type="button">ทำสไลด์เสนอแผน →</button></div>
     </section>}
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   balancedDates,
+  buildMechanismSlots,
   cleanIdeas,
   dedupeIdeas,
   enforceOfferPricing,
@@ -54,6 +55,30 @@ test("requires a matching price and unit for Offer ideas", () => {
   assert.equal(priced.priceLabel, "699 บาท / 10 cc");
   assert.match(priced.visualDirection, /699 บาท \/ 10 cc/);
   assert.equal(missingPrice.category, "ความรู้ / FAQ");
+});
+
+test("builds a fixed, universal mechanism skeleton before copy is written", () => {
+  const slots = buildMechanismSlots(36, "sales", [], true);
+  const mechanisms = new Set(slots.map((slot) => slot.mechanismId));
+
+  assert.equal(slots.length, 36);
+  assert.ok(mechanisms.size >= 6);
+  assert.ok(slots.some((slot) => slot.mechanismId === "value_offer"));
+  assert.ok(slots.some((slot) => slot.funnel === "conversion"));
+});
+
+test("does not force a promotion slot when the brief has no verified offer", () => {
+  const slots = buildMechanismSlots(20, "sales", [], false);
+  assert.equal(slots.some((slot) => slot.category === "โปรโมชั่น / Offer"), false);
+});
+
+test("filters near-duplicate headline structures, not just exact text", () => {
+  const result = dedupeIdeas([
+    idea({ title: "กลัวงบบานปลายจนไม่กล้าจอง", hook: "คุมงบไม่อยู่" }),
+    idea({ title: "กลัวงบบานปลายจนไม่กล้าตัดสินใจ", hook: "คุมงบไม่อยู่" }),
+    idea({ title: "ผลลัพธ์จริงหลังทำครบ 30 วัน", hook: "เห็นความต่าง" }),
+  ]);
+  assert.equal(result.length, 2);
 });
 
 test("balances schedule assignments and keeps every item inside its requested month", () => {
