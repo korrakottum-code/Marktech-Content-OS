@@ -759,16 +759,21 @@ export default function Home() {
   }
 
   async function approveProposal() {
+    // Approval is the user's workflow decision. History is useful for
+    // Copy-to-Adapt, but a temporary storage problem must not trap the team
+    // on the slide screen.
+    setStep(4);
+    setNotice("อนุมัติแผนแล้ว — ขั้นต่อไปคือกระจายวันลงตลอดทั้งเดือน");
+    scrollToId("month-calendar");
     try {
       const response = await fetch("/api/content/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client, planMonth, serviceScope, items: selectedIdeas }) });
       const payload = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error ?? "บันทึกประวัติแผนไม่สำเร็จ");
-      setStep(4);
       await saveDraft("manual", "approved");
       setNotice("บันทึกการอนุมัติแล้ว — ขั้นต่อไปคือกระจายวันลงตลอดทั้งเดือน โดยดูจำนวนงานและประเภทงานในแต่ละวัน");
-      scrollToId("month-calendar");
     } catch (error) {
-      setNotice(`ยังไม่อนุมัติแผน: ${error instanceof Error ? error.message : "บันทึกประวัติแผนไม่สำเร็จ"}`);
+      await saveDraft("manual", "approved");
+      setNotice(`อนุมัติแผนและไปจัดวันลงแล้ว — แต่ยังเก็บประวัติ Copy-to-Adapt ไม่สำเร็จ: ${error instanceof Error ? error.message : "ลองบันทึกใหม่ภายหลัง"}`);
     }
   }
 
