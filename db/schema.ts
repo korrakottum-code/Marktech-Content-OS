@@ -46,6 +46,24 @@ export const contentItems = sqliteTable(
   ],
 );
 
+export const planDrafts = sqliteTable(
+  "plan_drafts",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    clientName: text("client_name").notNull(),
+    planMonth: text("plan_month").notNull(),
+    status: text("status").notNull().default("draft"),
+    payload: text("payload").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("plan_drafts_updated_idx").on(table.updatedAt),
+    index("plan_drafts_client_month_idx").on(table.clientName, table.planMonth),
+  ],
+);
+
 export const mondayBoardMappings = sqliteTable(
   "monday_board_mappings",
   {

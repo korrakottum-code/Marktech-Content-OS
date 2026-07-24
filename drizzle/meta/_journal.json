@@ -15,6 +15,13 @@
       "when": 1784816131812,
       "tag": "0001_red_captain_america",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784867548185,
+      "tag": "0002_moaning_avengers",
+      "breakpoints": true
     }
   ]
 }
