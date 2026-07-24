@@ -118,9 +118,9 @@ title ไม่เกิน 55 ตัวอักษรไทย, hook 1–5 ค
 `;
     const batchSize = 9;
     const batches = Array.from({ length: Math.ceil(skeleton.length / batchSize) }, (_, index) => skeleton.slice(index * batchSize, (index + 1) * batchSize));
-    const results = await Promise.all(batches.map(async (batch) => {
+    const generateForSlots = async (batch: Slot[], avoidText = existingText || "ไม่มี") => {
       const result = await askJson(apiKey, contentInstructions, {
-        brief, batch, historicalContent: priorText || "ไม่มี", currentIdeasToAvoid: existingText || "ไม่มี",
+        brief, batch, historicalContent: priorText || "ไม่มี", currentIdeasToAvoid: avoidText,
         reusePolicy: input.reusePolicy === "adapt" ? "Copy-to-Adapt ได้เมื่อเปลี่ยน context, audience, offer หรือ mechanism ให้ชัด" : "สร้างมุมใหม่เป็นหลัก",
         additionalDirection: String(input.additionalDirection ?? "").slice(0, 300),
         focusedProduct: focusedProduct || null,
@@ -130,11 +130,22 @@ title ไม่เกิน 55 ตัวอักษรไทย, hook 1–5 ค
         const slot = slotsById.get(idea.slotId) ?? batch[index];
         return slot ? { ...idea, slotId: slot.slotId, mechanism: slot.mechanism, funnel: slot.funnel, angle: slot.angle, category: slot.category } : idea;
       });
-    }));
+    };
+    const results = await Promise.all(batches.map((batch) => generateForSlots(batch)));
+    let distinctIdeas = dedupeIdeas(results.flat());
+    // Similarity checks are deliberately strict. When they reject a slot,
+    // ask only for that slot again with every accepted idea as a blacklist.
+    for (let attempt = 0; attempt < 2 && distinctIdeas.length < target; attempt += 1) {
+      const acceptedSlots = new Set(distinctIdeas.map((idea) => idea.slotId));
+      const missingSlots = skeleton.filter((slot) => !acceptedSlots.has(slot.slotId));
+      if (!missingSlots.length) break;
+      const avoidText = [...(existingText ? [existingText] : []), ...distinctIdeas.map((idea) => `${idea.title} | ${idea.hook} | ${idea.angle ?? ""}`)].join("\n");
+      distinctIdeas = dedupeIdeas([...distinctIdeas, ...await generateForSlots(missingSlots, avoidText)]);
+    }
     const minimumPriceMentions = input.mode === "initial" ? Math.min(3, Math.max(1, Math.floor(target / 4))) : 1;
-    const ideas = enforceOfferPricing(ensurePriceMentions(dedupeIdeas(results.flat()), input.briefs, minimumPriceMentions), input.briefs)
+    const ideas = enforceOfferPricing(ensurePriceMentions(distinctIdeas, input.briefs, minimumPriceMentions), input.briefs)
       .map((idea, index) => ({ ...idea, id: `IDEA-${String(index + 1).padStart(2, "0")}` }));
-    const minimumUsableIdeas = input.mode === "additional" ? Math.max(1, Math.floor(target * 0.7)) : 26;
+    const minimumUsableIdeas = input.mode === "additional" ? Math.max(1, Math.floor(target * 0.7)) : target;
     if (ideas.length < minimumUsableIdeas) throw new Error("AI returned too few distinct ideas");
     return NextResponse.json({ ideas: ideas.slice(0, target), skeleton: skeleton.map(({ slotId, mechanism, category, funnel, angle }) => ({ slotId, mechanism, category, funnel, angle })) });
   } catch (error) {
